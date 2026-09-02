@@ -36,6 +36,7 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | Source | How | Comp data | Notes |
 |---|---|---|---|
 | Greenhouse, Lever, Ashby boards | each company's public board API | Ashby/Lever structured; Greenhouse parsed from text | `companies discover` finds boards for your cities via freehire; `companies --verify` checks them |
+| Adzuna | official API, your free key (https://developer.adzuna.com) | posted, or estimated (marked `est`) | on only when both keys are set |
 | freehire.me | public JSON API (its `/agent/jobs/search` endpoint) | enrichment | open-source aggregator ("no walls", MIT backend, self-hostable via `FREEHIRE_API_URL`); it publishes no rate-limit terms, so keep volume modest |
 | LinkedIn | **off by default** — see below | parsed from the posting | |
 

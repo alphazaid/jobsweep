@@ -11,7 +11,7 @@ import { pool } from "./http.ts"
 import { init } from "./init.ts"
 import { FORMATS, render, renderDigest, sortByPay, type Format, type Report } from "./output.ts"
 import { COMPANIES_PATH, DIGEST_DIR, PROFILE_PATH, UI_DIR, configDir } from "./paths.ts"
-import { loadEnv, loadProfile, parseMoney, type Profile } from "./profile.ts"
+import { defaultSources, loadEnv, loadProfile, parseMoney, type Profile } from "./profile.ts"
 import { PROVIDERS } from "./providers/index.ts"
 import type { ProviderCtx } from "./providers/provider.ts"
 import { run } from "./run.ts"
@@ -95,7 +95,7 @@ function paramsFor(profile: Profile | null, over: Partial<SearchParams> & { citi
     maxYoe: over.maxYoe !== undefined ? over.maxYoe : (profile?.maxYoe ?? null),
     levels: over.levels !== undefined ? over.levels : (profile?.levels ?? null),
     days: over.days !== undefined ? over.days : (profile?.days ?? null),
-    sources: over.sources ?? profile?.sources ?? ALL_SOURCES.filter((s) => s !== "linkedin"),
+    sources: over.sources ?? profile?.sources ?? defaultSources(),
     perSource: over.perSource ?? 50,
     hydrate: over.hydrate ?? true,
     linkedinAccepted: over.linkedinAccepted ?? profile?.linkedinAccepted ?? false,

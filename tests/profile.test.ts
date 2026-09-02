@@ -25,4 +25,21 @@ describe("parseProfile", () => {
     expect(p.titleRe.test("Backend Engineer")).toBe(true)
     expect(p.titleRe.test("Software Engineer")).toBe(false)
   })
+  test("a minimal profile never defaults to LinkedIn, and to Adzuna only with both keys in the environment", () => {
+    const saved = { id: process.env.ADZUNA_APP_ID, key: process.env.ADZUNA_APP_KEY }
+    try {
+      delete process.env.ADZUNA_APP_ID
+      delete process.env.ADZUNA_APP_KEY
+      expect(parseProfile({ cities: ["x"] }).sources).toEqual(["greenhouse", "lever", "ashby", "freehire"])
+      process.env.ADZUNA_APP_ID = "id"
+      expect(parseProfile({ cities: ["x"] }).sources).not.toContain("adzuna")
+      process.env.ADZUNA_APP_KEY = "key"
+      expect(parseProfile({ cities: ["x"] }).sources).toEqual(["greenhouse", "lever", "ashby", "adzuna", "freehire"])
+    } finally {
+      if (saved.id === undefined) delete process.env.ADZUNA_APP_ID
+      else process.env.ADZUNA_APP_ID = saved.id
+      if (saved.key === undefined) delete process.env.ADZUNA_APP_KEY
+      else process.env.ADZUNA_APP_KEY = saved.key
+    }
+  })
 })

@@ -55,6 +55,15 @@ function bad(msg: string): never {
   throw new Error(`profile.json: ${msg}`)
 }
 
+/**
+ * Sources when a profile names none: the company boards and freehire always; Adzuna only
+ * when its credentials are in the environment (its provider errors without them); LinkedIn never.
+ */
+export function defaultSources(): Source[] {
+  const adzuna = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY)
+  return ALL_SOURCES.filter((s) => s !== "linkedin" && (s !== "adzuna" || adzuna))
+}
+
 const PROFILE_KEYS: Record<string, true> = {
   cities: true, preset: true, queries: true, query: true, titlePattern: true, minTc: true, maxYoe: true, levels: true, remote: true, days: true, sources: true, skills: true, exclude: true, linkedinAccepted: true,
 }
@@ -81,7 +90,7 @@ export function parseProfile(raw: Record<string, unknown>): Profile {
 
   const levels = raw.levels == null ? null : (strings(raw.levels, "levels") as Level[])
   for (const l of levels ?? []) if (!LEVELS.includes(l)) bad(`levels must be in ${LEVELS.join(",")}`)
-  const sources = raw.sources == null ? ALL_SOURCES.filter((s) => s !== "linkedin") : (strings(raw.sources, "sources") as Source[])
+  const sources = raw.sources == null ? defaultSources() : (strings(raw.sources, "sources") as Source[])
   for (const s of sources) if (!ALL_SOURCES.includes(s)) bad(`sources must be in ${ALL_SOURCES.join(",")}`)
   const remote = raw.remote == null ? "include" : String(raw.remote)
   if (!["include", "only", "exclude"].includes(remote)) bad(`remote must be include|only|exclude`)
