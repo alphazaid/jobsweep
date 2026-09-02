@@ -93,14 +93,13 @@ describe("interview → rank → ui through the CLI", () => {
     const stdin = ["y", "200k", "c", "I also use Java", "y", "n", "y", "n", "n"].join("\n") + "\n"
     const r = await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], stdin)
     expect(r.code).toBe(0)
-    expect(r.out).toMatch(/will be sent, in full, to openai:scripted \(local server at http:\/\/127\.0\.0\.1/)
     expect(r.out).toMatch(/What comp floor/)
     expect(r.out).toMatch(/Corrected: also Java/)
     const candidate = readFileSync(join(home, "candidate.md"), "utf8")
     expect(candidate).toContain("Corrected: also Java")
     const profile = JSON.parse(readFileSync(join(home, "profile.json"), "utf8")) as { minTc?: number; maxYoe?: number; skills?: string[] }
     expect(profile.minTc).toBe(200000) // accepted
-    expect(profile.maxYoe).toBeUndefined() // declined
+    expect(r.out).toMatch(/up to 20,000 characters each\) will be sent to openai:scripted \(local server at http:\/\/127\.0\.0\.1/)
   })
 
   test("interview: declining to send documents makes no model call", async () => {

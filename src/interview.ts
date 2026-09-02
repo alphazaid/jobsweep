@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import candidatePrompt from "../prompts/candidate.md" with { type: "text" }
 import interviewPrompt from "../prompts/interview.md" with { type: "text" }
-import { fileSource, hasLifeos, lifeosSources, type ContextSource } from "./context.ts"
+import { fileSource, hasLifeos, lifeosSources, MAX_CHARS, type ContextSource } from "./context.ts"
 import { completeJson, type Message, type Model } from "./llm.ts"
 import { unfence } from "./rank.ts"
 import { CANDIDATE_PATH, PROFILE_PATH } from "./paths.ts"
@@ -102,7 +102,7 @@ export async function interview(o: InterviewOptions): Promise<number> {
     if (o.lifeos === true || yes(`Send them to ${o.model.name} as interview context?`)) sources.push(...lifeos)
   }
   if (sources.length) {
-    out(`\nThese ${sources.length} document${sources.length === 1 ? "" : "s"} will be sent, in full, to ${o.model.name} (${providerOf(o.model.name)}) along with your answers:`)
+    out(`\nThe extracted text of these ${sources.length} document${sources.length === 1 ? "" : "s"} (up to ${MAX_CHARS.toLocaleString()} characters each) will be sent to ${o.model.name} (${providerOf(o.model.name)}) along with your answers:`)
     for (const s of sources) out(`  - ${s.label} (${s.text.length} chars)`)
     if (!yes("Continue?")) {
       out("Nothing sent.")

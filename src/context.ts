@@ -12,7 +12,8 @@ export interface ContextSource {
   text: string
 }
 
-const MAX_CHARS = 20_000
+/** Per-document cap on what is extracted and sent to a model; the consent line quotes this number. */
+export const MAX_CHARS = 20_000
 
 async function readDocument(path: string): Promise<string> {
   if (extname(path).toLowerCase() === ".pdf") {

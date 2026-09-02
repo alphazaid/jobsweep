@@ -60,7 +60,7 @@ function postingBlock(j: Job): string {
 
 /** What the model actually sees of a posting; if any of it changes, the cached review is stale. */
 function contentHash(j: Job): string {
-  return Bun.hash(`${j.title}\n${j.company}\n${j.location}\n${JSON.stringify(j.salary)}\n${j.yoeMin}\n${(j.description ?? "").slice(0, DESC_CHARS)}`).toString(36)
+  return Bun.hash(`${j.title}\n${j.company}\n${j.location}\n${j.workMode}\n${JSON.stringify(j.salary)}\n${j.yoeMin}\n${(j.description ?? "").slice(0, DESC_CHARS)}`).toString(36)
 }
 
 export interface RankOptions {
