@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { DB_PATH } from "./paths.ts"
 import type { FeedCache } from "./providers/provider.ts"
-import type { Job } from "./types.ts"
+import type { Decision, DecisionStatus, Job, RunSummary } from "./types.ts"
 
 export class Store implements FeedCache {
   private db: Database
@@ -28,6 +28,20 @@ export class Store implements FeedCache {
         fetched_at INTEGER NOT NULL,
         body TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS runs (
+        ts INTEGER PRIMARY KEY,
+        cities TEXT NOT NULL,
+        total INTEGER NOT NULL,
+        with_comp INTEGER NOT NULL,
+        new_count INTEGER NOT NULL,
+        carried INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS decisions (
+        job_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+      );
     `)
     // Nothing reads a cache row older than the longest TTL (LinkedIn details, 14 d); drop them so the file stays small.
     this.db.query("DELETE FROM feeds WHERE fetched_at < ?").run(this.now() - 15 * 86_400_000)
@@ -40,6 +54,35 @@ export class Store implements FeedCache {
   /** Drop every cached feed/detail (postings and their seen-dates are kept) and reclaim the space. */
   clearCache(): void {
     this.db.exec("DELETE FROM feeds; VACUUM;")
+  }
+
+  /** One row per completed search, for the dashboard's history. */
+  recordRun(r: Omit<RunSummary, "ts">): void {
+    this.db
+      .query("INSERT OR REPLACE INTO runs (ts, cities, total, with_comp, new_count, carried) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(this.now(), r.cities.join(" | "), r.total, r.withComp, r.newCount, r.carried)
+  }
+
+  runs(limit = 60): RunSummary[] {
+    return this.db
+      .query<{ ts: number; cities: string; total: number; with_comp: number; new_count: number; carried: number }, [number]>("SELECT * FROM runs ORDER BY ts DESC LIMIT ?")
+      .all(limit)
+      .reverse()
+      .map((r) => ({ ts: r.ts, cities: r.cities.split(" | "), total: r.total, withComp: r.with_comp, newCount: r.new_count, carried: r.carried }))
+  }
+
+  /** Apply/maybe/skip/applied marks and notes, so they survive any one browser. Empty status clears the mark. */
+  setDecision(jobId: string, status: DecisionStatus | "", note: string): void {
+    if (!status && !note) this.db.query("DELETE FROM decisions WHERE job_id = ?").run(jobId)
+    else this.db.query("INSERT OR REPLACE INTO decisions (job_id, status, note, updated_at) VALUES (?, ?, ?, ?)").run(jobId, status, note, this.now())
+  }
+
+  decisions(): Record<string, Decision> {
+    const out: Record<string, Decision> = {}
+    for (const r of this.db.query<{ job_id: string; status: string; note: string; updated_at: number }, []>("SELECT * FROM decisions").all()) {
+      out[r.job_id] = { status: r.status as DecisionStatus | "", note: r.note, updatedAt: r.updated_at }
+    }
+    return out
   }
 
   sizeBytes(): number {

@@ -1,4 +1,4 @@
-import type { Job } from "./types.ts"
+import type { Decision, Job } from "./types.ts"
 
 export interface UiOptions {
   title: string
@@ -14,6 +14,10 @@ export interface UiOptions {
   picks?: Set<string>
   /** localStorage key; change it to start a fresh board for the same data. */
   storageKey: string
+  /** Marks already stored server-side (when served by `jobsweep serve`); seeds the page state. */
+  decisions?: Record<string, Decision>
+  /** When served over HTTP, every mark/note is POSTed to /api/decisions as well as kept in localStorage. */
+  serverSync?: boolean
 }
 
 interface UiJob {
@@ -102,7 +106,7 @@ footer a{color:var(--mute)}
 
 // The page script is plain JS kept as a string so the whole page ships as one file with no build step.
 const SCRIPT = `
-const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+const save=(id)=>{localStorage.setItem(KEY,JSON.stringify(state));if(SYNC&&id)fetch("/api/decisions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,status:state[id]?.s||"",note:state[id]?.n||""})}).catch(()=>{});};
 const k=n=>"$"+Math.round(n/1000)+"k";
 const SRC={linkedin:"LinkedIn",greenhouse:"Greenhouse",lever:"Lever",ashby:"Ashby",adzuna:"Adzuna",freehire:"freehire"};
 const LO=100000,HI=400000,pct=v=>Math.max(0,Math.min(100,(v-LO)/(HI-LO)*100));
@@ -163,10 +167,10 @@ function renderDetail(){
    +'<div class="desc" style="margin-top:16px">'+(j.desc?hl(j.desc):"<span style='color:var(--mute)'>No description captured — open the posting.</span>")+'</div>';
   d.scrollTop=0;
   d.querySelectorAll(".acts button").forEach(b=>b.onclick=()=>setStatus(j.id,b.dataset.s));
-  d.querySelector("textarea").oninput=e=>{state[j.id]={...(state[j.id]||{}),n:e.target.value};save();};
+  d.querySelector("textarea").oninput=e=>{state[j.id]={...(state[j.id]||{}),n:e.target.value};save(j.id);};
 }
 function setStatus(id,s){const before=visible();const i=before.findIndex(r=>r.id===id);
-  const cur=state[id]||{};state[id]={...cur,s:cur.s===s?"":s,t:Date.now()};save();
+  const cur=state[id]||{};state[id]={...cur,s:cur.s===s?"":s,t:Date.now()};save(id);
   const rows=renderList();renderDetail();
   if(!rows.some(r=>r.id===id)){const next=rows[i]??rows[i-1];if(next)select(next.id);}
 }
@@ -188,7 +192,7 @@ document.addEventListener("keydown",e=>{
 });
 document.getElementById("export").onclick=e=>{e.preventDefault();const out=JOBS.filter(j=>state[j.id]?.s).map(j=>({status:state[j.id].s,title:j.title,company:j.company,comp:j.max?k(j.max):null,url:j.url,note:state[j.id].n||""}));
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:"application/json"}));a.download="job-decisions.json";a.click();};
-document.getElementById("reset").onclick=e=>{e.preventDefault();if(confirm("Clear every apply/maybe/skip/applied mark and note?")){state={};save();renderList();renderDetail();}};
+document.getElementById("reset").onclick=e=>{e.preventDefault();if(confirm("Clear every apply/maybe/skip/applied mark and note?")){const ids=Object.keys(state);state={};localStorage.setItem(KEY,"{}");if(SYNC)for(const id of ids)fetch("/api/decisions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,status:"",note:""})}).catch(()=>{});renderList();renderDetail();}};
 if(HAS_PICKS){document.getElementById("sort").insertAdjacentHTML("afterbegin",'<option value="pick">Picks first</option>');document.getElementById("sort").value="pick";}
 if(HAS_AI){document.getElementById("sort").insertAdjacentHTML("afterbegin",'<option value="ai">AI fit</option>');document.getElementById("sort").value="ai";}
 const first=renderList();if(first.length)select(first[0].id);
@@ -238,14 +242,17 @@ export function renderUi(jobs: Job[], o: UiOptions): string {
   <section id="list" role="listbox" aria-label="Postings"></section>
   <section id="detail"><div class="empty">Select a posting. ↑↓ or j/k to move · a apply · m maybe · x skip · d applied · o open in new tab</div></section>
 </main>
-<footer><span id="shown"></span><span>a apply · m maybe · x skip · d applied · o open · / search</span><a href="#" id="export">Export decisions (JSON)</a><a href="#" id="reset">Clear decisions</a></footer>
+<footer><span id="shown"></span>${o.serverSync ? '<a href="/">Dashboard</a>' : ""}<span>a apply · m maybe · x skip · d applied · o open · / search</span><a href="#" id="export">Export decisions (JSON)</a><a href="#" id="reset">Clear decisions</a></footer>
 <script>
 const JOBS=${json(data)};
 const KEY=${json(o.storageKey)};
 const FLOOR=${json(o.floor)};
 const SKILLS=${json(o.skills)};
 const HAS_PICKS=${json(!!o.picks?.size)};
-let state=JSON.parse(localStorage.getItem(KEY)||"{}");
+const SYNC=${json(!!o.serverSync)};
+const SERVER_STATE=${json(Object.fromEntries(Object.entries(o.decisions ?? {}).map(([id, d]) => [id, { s: d.status, n: d.note, t: d.updatedAt }])))};
+// Server marks win over a stale localStorage copy; the page then keeps both in step.
+let state=Object.assign({},JSON.parse(localStorage.getItem(KEY)||"{}"),SERVER_STATE);
 ${SCRIPT}
 </script></body></html>`
 }

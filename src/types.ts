@@ -115,3 +115,23 @@ export class ProviderError extends Error {
     super(message)
   }
 }
+
+/** One completed search, for history charts. */
+export interface RunSummary {
+  ts: number
+  cities: string[]
+  total: number
+  withComp: number
+  newCount: number
+  carried: number
+}
+
+export type DecisionStatus = "apply" | "maybe" | "skip" | "applied"
+export const DECISION_STATUSES: DecisionStatus[] = ["apply", "maybe", "skip", "applied"]
+
+/** A user's mark on a posting; kept server-side by `jobsweep serve` and exportable. */
+export interface Decision {
+  status: DecisionStatus | ""
+  note: string
+  updatedAt: number
+}

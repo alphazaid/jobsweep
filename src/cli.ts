@@ -17,6 +17,8 @@ import { defaultSources, loadEnv, loadProfile, parseMoney, type Profile } from "
 import { PROVIDERS } from "./providers/index.ts"
 import type { ProviderCtx } from "./providers/provider.ts"
 import { rankJobs, sortByAi } from "./rank.ts"
+import { readLastSearch, startServer } from "./serve.ts"
+import { toCsv, toRows } from "./export.ts"
 import { run } from "./run.ts"
 import { AGENCY_RE, ALL_SOURCES, DEFAULT_QUERIES, LEVELS, SWE_TITLE_RE, type Company, type Job, type Level, type SearchParams, type Source } from "./types.ts"
 import { renderUi } from "./ui.ts"
@@ -32,6 +34,11 @@ USAGE
   jobsweep companies [--verify]       List company boards; --verify hits each one live.
   jobsweep companies discover         Add every Greenhouse/Lever/Ashby board hiring in your cities (via freehire).
   jobsweep cache [clear]              Show cache size, or drop cached feeds.
+  jobsweep serve [--port 4747] [--open]
+                                      Local dashboard: stats, history, run-search button with live log, triage page with
+                                      server-kept marks, CSV/JSON export. Binds 127.0.0.1 only.
+  jobsweep export [--csv|--json] [--out <file>]
+                                      Every posting from the last search with comp, years, fit, AI review, your decision, URL.
 
 WITH A MODEL (optional — bring your own key; search/digest never call a model unless asked)
   jobsweep interview [--resume <file>] [--notes <file>]...
@@ -212,7 +219,7 @@ async function search(argv: string[]): Promise<number> {
   process.stdout.write(render(report, fmt) + "\n")
   // The UI and digest build from the last search.
   mkdirSync(DIGEST_DIR(), { recursive: true })
-  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date: new Date().toISOString().slice(0, 10), params: report.params, jobs: result.jobs, carriedIds: Object.keys(result.carriedIds) }))
+  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date: new Date().toISOString().slice(0, 10), params: report.params, jobs: result.jobs, carriedIds: Object.keys(result.carriedIds), newIds: Object.keys(result.newIds) }))
   return 0
 }
 
@@ -340,7 +347,7 @@ async function digest(argv: string[]): Promise<number> {
   const md = renderDigest(d)
   await Bun.write(join(DIGEST_DIR(), `${date}.md`), md + "\n")
   await Bun.write(join(DIGEST_DIR(), "latest.json"), JSON.stringify({ ...d, all: jobs }, null, 2) + "\n")
-  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date, params: { cities: profile.cities, minTc: profile.minTc, maxYoe: profile.maxYoe, days: profile.days }, jobs, carriedIds: Object.keys(result.carriedIds) }))
+  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date, params: { cities: profile.cities, minTc: profile.minTc, maxYoe: profile.maxYoe, days: profile.days }, jobs, carriedIds: Object.keys(result.carriedIds), newIds: Object.keys(result.newIds) }))
   process.stdout.write((v.format === "json" ? JSON.stringify({ ...d, all: jobs }, null, 2) : md) + "\n")
   return 0
 }
@@ -435,6 +442,36 @@ async function companies(argv: string[]): Promise<number> {
   return bad ? 1 : 0
 }
 
+async function serve(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { port: { type: "string", default: "4747" }, open: { type: "boolean", default: false }, profile: { type: "string" } } })
+  const profile = await loadProfile(v.profile ?? PROFILE_PATH())
+  const port = int("port", v.port)
+  // Relaunch this same entrypoint for "Run search now" — works from source (`bun run src/cli.ts`) and from the compiled binary alike.
+  const self = process.argv[1] && process.argv[1].endsWith(".ts") ? ["bun", "run", process.argv[1], "search"] : [process.execPath, "search"]
+  const server = startServer({ port, profile, searchCommand: self, log: (m) => process.stderr.write(`# ${m}\n`) })
+  const url = `http://127.0.0.1:${server.port}`
+  process.stdout.write(`jobsweep dashboard at ${url}  (Ctrl-C to stop)\n`)
+  if (v.open) Bun.spawn(process.platform === "win32" ? ["cmd", "/c", "start", "", url] : [process.platform === "darwin" ? "open" : "xdg-open", url], { stdout: "ignore", stderr: "ignore" })
+  await new Promise(() => {}) // run until killed
+  return 0
+}
+
+async function exportCmd(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { csv: { type: "boolean", default: false }, json: { type: "boolean", default: false }, out: { type: "string" } } })
+  const last = await readLastSearch()
+  if (!last) fail("no search yet — run `jobsweep search` first", "NO_SEARCH")
+  const store = new Store()
+  const rows = toRows(last.jobs, store.decisions())
+  store.close()
+  const asCsv = v.csv || (!v.json && (v.out?.endsWith(".csv") ?? true))
+  const body = asCsv ? toCsv(rows) : JSON.stringify(rows, null, 2) + "\n"
+  if (v.out) {
+    await Bun.write(v.out, body)
+    process.stdout.write(`${v.out}: ${rows.length} postings\n`)
+  } else process.stdout.write(body)
+  return 0
+}
+
 function cache(argv: string[]): number {
   const store = new Store()
   if (argv[0] === "clear") {
@@ -460,6 +497,8 @@ const job =
   : cmd === "detail" ? detail(rest)
   : cmd === "companies" ? companies(rest)
   : cmd === "cache" ? Promise.resolve(cache(rest))
+  : cmd === "serve" ? serve(rest)
+  : cmd === "export" ? exportCmd(rest)
   : cmd === "--version" || cmd === "-v" ? (process.stdout.write(`${pkg.version}\n`), Promise.resolve(0))
   : cmd === undefined || cmd === "--help" || cmd === "-h" ? (process.stdout.write(HELP), Promise.resolve(cmd ? 0 : 1))
   : fail(`unknown command "${cmd}"`, "BAD_CMD")

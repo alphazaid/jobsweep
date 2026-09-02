@@ -113,5 +113,7 @@ export async function run(paramsPerCity: SearchParams[], profile: Pick<Profile, 
   for (const j of carried) carriedIds[j.id] = true
   if (carried.length) ctx.log(`carry-forward: ${carried.length} postings from earlier runs still pass today's filters`)
 
-  return { jobs: dedupe([...live, ...carried]), dropped, errors, newIds, carriedIds }
+  const jobs = dedupe([...live, ...carried])
+  store.recordRun({ cities: paramsPerCity.map((p) => p.city), total: jobs.length, withComp: jobs.filter((j) => j.salary).length, newCount: Object.keys(newIds).length, carried: carried.length })
+  return { jobs, dropped, errors, newIds, carriedIds }
 }

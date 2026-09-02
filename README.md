@@ -101,6 +101,18 @@ Unknown keys are rejected rather than silently ignored. Secrets go in `~/.config
 40 6 * * * /usr/local/bin/jobsweep digest > /dev/null 2>&1
 ```
 
+## Dashboard and export
+
+```sh
+jobsweep serve --open     # http://127.0.0.1:4747 — stat cards, postings-per-run history, breakdowns by source /
+                          # comp band / title band / company, decision funnel, "Run search now" with the live log,
+                          # and the triage page with marks kept in SQLite (shared across browsers, exportable)
+jobsweep export --csv --out jobs.csv   # every posting from the last search: comp, years, fit, AI review, your decision, URL
+jobsweep export --json                 # same rows as JSON on stdout
+```
+
+The server binds `127.0.0.1` only. `/api/jobs.csv`, `/api/jobs.json`, `/api/decisions.json`, `/api/stats.json` are the same data over HTTP.
+
 ## Develop
 
 ```sh
