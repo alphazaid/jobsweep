@@ -98,6 +98,7 @@ describe("interview → rank → ui through the CLI", () => {
     const candidate = readFileSync(join(home, "candidate.md"), "utf8")
     expect(candidate).toContain("Corrected: also Java")
     const profile = JSON.parse(readFileSync(join(home, "profile.json"), "utf8")) as { minTc?: number; maxYoe?: number; skills?: string[] }
+    expect(profile.maxYoe).toBeUndefined() // declined
     expect(profile.minTc).toBe(200000) // accepted
     expect(r.out).toMatch(/up to 20,000 characters each\) will be sent to openai:scripted \(local server at http:\/\/127\.0\.0\.1/)
   })
