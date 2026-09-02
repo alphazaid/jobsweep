@@ -110,7 +110,8 @@ export async function run(paramsPerCity: SearchParams[], profile: Pick<Profile, 
       keep(applyFilters(prior.filter((j) => open.has(j.sourceId)), p), carriedById)
     }
   }
-  const carried = scoreFit(dedupe(Object.values(carriedById)), profile.skills).filter((j) => !liveIds[j.id])
+  // Same URL guard as live: rows stored before it existed would otherwise re-enter through carry-forward.
+  const carried = scoreFit(dedupe(Object.values(carriedById).filter((j) => isHttpUrl(j.url))), profile.skills).filter((j) => !liveIds[j.id])
   const carriedIds: Record<string, true> = {}
   for (const j of carried) carriedIds[j.id] = true
   if (carried.length) ctx.log(`carry-forward: ${carried.length} postings from earlier runs still pass today's filters`)

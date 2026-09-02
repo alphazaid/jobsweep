@@ -97,6 +97,13 @@ describe("run carry-forward", () => {
     expect(r2.newIds).toEqual({})
   })
 
+  test("non-http posting URLs are dropped, live and carried", async () => {
+    // Seed the store directly, as a row persisted before the guard existed would be.
+    store.record([job("old", { url: "javascript:alert(1)" }), job("ok")])
+    const r = await run([params], profile, ctxWith(fake([job("live", { url: "data:text/html,x" }), job("ok")])), store)
+    expect(r.jobs.map((j) => j.id)).toEqual(["linkedin:ok"])
+  })
+
   test("carried postings are re-filtered by today's params", async () => {
     await run([params], profile, ctxWith(fake([job("1", { yoeMin: 5 }), job("2")])), store)
     const r2 = await run([{ ...params, maxYoe: 3 }], profile, ctxWith(fake([])), store)
