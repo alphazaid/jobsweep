@@ -46,6 +46,7 @@ function toJob(company: Company, j: GhJob): Job {
     yoeMin: parseYoe(description),
     level: levelFromTitle(j.title),
     fit: null,
+    ai: null,
     description,
   }
 }

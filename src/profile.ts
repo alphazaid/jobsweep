@@ -23,6 +23,8 @@ export interface Profile {
   exclude: string[]
   /** The user read the LinkedIn terms notice and chose to run that connector locally. */
   linkedinAccepted: boolean
+  /** Model for `interview`/`rank`, e.g. "openai:gpt-4o-mini"; null = not configured (JOBSWEEP_MODEL still applies). */
+  model: string | null
 }
 
 export const LINKEDIN_NOTICE =
@@ -65,7 +67,7 @@ export function defaultSources(): Source[] {
 }
 
 const PROFILE_KEYS: Record<string, true> = {
-  cities: true, preset: true, queries: true, query: true, titlePattern: true, minTc: true, maxYoe: true, levels: true, remote: true, days: true, sources: true, skills: true, exclude: true, linkedinAccepted: true,
+  cities: true, preset: true, queries: true, query: true, titlePattern: true, minTc: true, maxYoe: true, levels: true, remote: true, days: true, sources: true, skills: true, exclude: true, linkedinAccepted: true, model: true,
 }
 
 function strings(raw: unknown, key: string): string[] | null {
@@ -120,6 +122,7 @@ export function parseProfile(raw: Record<string, unknown>): Profile {
     skills: strings(raw.skills, "skills") ?? preset.skills,
     exclude: raw.exclude == null ? preset.exclude : (strings(raw.exclude, "exclude") ?? []),
     linkedinAccepted: raw.linkedinAccepted === true,
+    model: raw.model == null ? null : String(raw.model),
   }
 }
 

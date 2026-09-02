@@ -173,9 +173,9 @@ export function renderDigest(d: Digest): string {
     "",
     d.profileLine,
     "",
-    `## New (${d.fresh.length})`,
+    `## New (${d.fresh.length})${d.fresh.some((j) => j.ai) ? " — reviewed" : ""}`,
     "",
-    mdTable(sortByFit(d.fresh), marks),
+    d.fresh.some((j) => j.ai) ? renderRanked([...d.fresh].sort((a, b) => (b.ai?.fit ?? 0) - (a.ai?.fit ?? 0)), true) : mdTable(sortByFit(d.fresh), marks),
     "",
     `## Top open by comp (${d.topOpen.length} of ${d.totalOpen})`,
     "",
@@ -185,4 +185,31 @@ export function renderDigest(d: Digest): string {
   ]
   if (d.errors.length) lines.push("", "Sources skipped:", ...d.errors.map((e) => `- ${e.source}: ${e.error}`))
   return lines.join("\n")
+}
+
+const FIT_LABEL: Record<number, string> = { 5: "apply today", 4: "apply", 3: "maybe", 2: "unlikely", 1: "skip" }
+
+/** Ranked listing: AI fit, one-line reason, comp, years, link. Markdown when `md`, else a plain block per posting. */
+export function renderRanked(jobs: Job[], md: boolean): string {
+  if (!jobs.length) return md ? "_none_" : "(none)"
+  if (md) {
+    const head = "| Fit | Title | Company | Location | Comp | YOE | Why |\n|---|---|---|---|---|---|---|"
+    const rows = jobs.map(
+      (j) =>
+        `| ${j.ai ? `${j.ai.fit} ${FIT_LABEL[j.ai.fit] ?? ""}` : "—"} | [${j.title.replace(/\|/g, "/")}](${j.url}) | ${j.company ?? "—"} | ${j.location ?? "—"} | ${formatSalary(j.salary)} | ${yoe(j)} | ${(j.ai?.reason ?? "").replace(/\|/g, "/")}${j.ai?.dealbreakers.length ? ` **Dealbreakers:** ${j.ai.dealbreakers.join("; ")}` : ""} |`,
+    )
+    return [head, ...rows].join("\n")
+  }
+  return jobs
+    .map((j) =>
+      [
+        `${j.ai ? `[${j.ai.fit}/5 ${FIT_LABEL[j.ai.fit] ?? ""}]` : "[unscored]"} ${j.title} — ${j.company ?? "—"}`,
+        `  ${j.location ?? "—"} · ${formatSalary(j.salary)} · ${yoe(j)} · ${date(j)} · ${SRC[j.source]}`,
+        ...(j.ai ? [`  ${j.ai.reason}`] : []),
+        ...(j.ai?.dealbreakers.length ? [`  dealbreakers: ${j.ai.dealbreakers.join("; ")}`] : []),
+        ...(j.ai?.emphasize.length ? [`  lead with: ${j.ai.emphasize.join("; ")}`] : []),
+        `  ${j.url}`,
+      ].join("\n"),
+    )
+    .join("\n\n")
 }

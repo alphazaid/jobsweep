@@ -51,6 +51,7 @@ function toJob(r: AdzunaResult): Job {
     yoeMin: parseYoe(description),
     level: levelFromTitle(r.title),
     fit: null,
+    ai: null,
     description,
   }
 }

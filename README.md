@@ -29,6 +29,23 @@ jobsweep search               # the sweep
 jobsweep ui --open            # triage page: j/k move · a apply · m maybe · x skip · d applied · o open
 ```
 
+## With a model (optional)
+
+Everything above is deterministic and free. Bring your own model key and two more commands turn on:
+
+```sh
+jobsweep interview --resume ~/resume.pdf   # builds candidate.md: reads your resume (pdf/md/txt), then asks
+                                           # only what it can't know (targets, constraints, comp, timing)
+jobsweep rank                              # scores the last search 1–5 against candidate.md, with reasons
+jobsweep ui --open                         # rows now carry the fit, the reason, dealbreakers, what to lead with
+jobsweep digest --rank                     # the daily digest reviews only what's new
+```
+
+- **Nothing is trusted silently.** The interview shows which files it read and asks before using them; the drafted profile is shown and you accept, correct, or redo it before it's saved; each suggested filter change is confirmed one by one.
+- **LifeOS users:** if `~/.claude/LIFEOS` exists, your identity, resume, goals, and projects files are offered as interview context (`--no-lifeos` to skip).
+- **Bounded spend:** `rank` reviews only postings that passed the mechanical filters and haven't been reviewed under this candidate profile + model before (cached in SQLite). `search` and plain `digest` never call a model.
+- **Configure:** `JOBSWEEP_MODEL` or `"model"` in `profile.json` = `openai:<model>` or `anthropic:<model>`; keys in `~/.config/jobsweep/.env`: `OPENAI_API_KEY` (set `OPENAI_BASE_URL` for OpenRouter, Ollama, LM Studio) or `ANTHROPIC_API_KEY`. Prompts live in `prompts/` — read them, edit them.
+
 Run `jobsweep search` again tomorrow: new postings are starred, everything you've already seen is remembered, and the triage page keeps your apply/skip marks.
 
 ## What it searches
@@ -88,7 +105,7 @@ Unknown keys are rejected rather than silently ignored. Secrets go in `~/.config
 
 ```sh
 bun install
-bun test            # 112 tests, all offline
+bun test            # 140 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 ```

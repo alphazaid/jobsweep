@@ -39,6 +39,7 @@ function job(id: string, over: Partial<Job> = {}): Job {
     level: "mid",
     description: null,
     fit: null,
+    ai: null,
     ...over,
   }
 }

@@ -33,6 +33,7 @@ function job(over: Partial<Job>): Job {
     yoeMin: null,
     level: "mid",
     fit: null,
+    ai: null,
     description: null,
     ...over,
   }

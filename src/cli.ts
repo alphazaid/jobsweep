@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseArgs } from "node:util"
 import companiesSeed from "../companies.seed.json"
@@ -9,11 +9,14 @@ import { discoverBoards } from "./discover.ts"
 import { matchedLocation } from "./filters.ts"
 import { pool } from "./http.ts"
 import { init } from "./init.ts"
-import { FORMATS, render, renderDigest, sortByPay, type Format, type Report } from "./output.ts"
-import { COMPANIES_PATH, DIGEST_DIR, PROFILE_PATH, UI_DIR, configDir } from "./paths.ts"
+import { interview } from "./interview.ts"
+import { configureModel, MODEL_HELP, type Model } from "./llm.ts"
+import { FORMATS, render, renderDigest, renderRanked, sortByPay, type Format, type Report } from "./output.ts"
+import { CANDIDATE_PATH, COMPANIES_PATH, DIGEST_DIR, PROFILE_PATH, UI_DIR, configDir } from "./paths.ts"
 import { defaultSources, loadEnv, loadProfile, parseMoney, type Profile } from "./profile.ts"
 import { PROVIDERS } from "./providers/index.ts"
 import type { ProviderCtx } from "./providers/provider.ts"
+import { rankJobs, sortByAi } from "./rank.ts"
 import { run } from "./run.ts"
 import { AGENCY_RE, ALL_SOURCES, DEFAULT_QUERIES, LEVELS, SWE_TITLE_RE, type Company, type Job, type Level, type SearchParams, type Source } from "./types.ts"
 import { renderUi } from "./ui.ts"
@@ -24,13 +27,23 @@ USAGE
   jobsweep init                       Set up your profile (cities, comp floor, years, skills, sources, Adzuna key).
   jobsweep search [flags]             Search. Flags override the profile; with a profile, no flags needed.
   jobsweep ui [--open]                Build a one-file triage page from the last search and optionally open it.
-  jobsweep digest [--top <n>]         Run the profile, write digests/<date>.md + latest.json, print the digest.
+  jobsweep digest [--top <n>] [--rank] Run the profile, write digests/<date>.md + latest.json, print the digest.
   jobsweep detail <id>                Full posting JSON (e.g. greenhouse:stripe:7532733, linkedin:4300011451).
   jobsweep companies [--verify]       List company boards; --verify hits each one live.
   jobsweep companies discover         Add every Greenhouse/Lever/Ashby board hiring in your cities (via freehire).
   jobsweep cache [clear]              Show cache size, or drop cached feeds.
 
-Config lives in ${configDir()} (override with JOBSWEEP_HOME): profile.json, companies.json, metros.json, .env, jobsweep.db, digests/, ui/
+WITH A MODEL (optional — bring your own key; search/digest never call a model unless asked)
+  jobsweep interview [--resume <file>] [--notes <file>]...
+                                      Build candidate.md from your resume/notes (and LifeOS files if present, with your
+                                      confirmation), then a short Q&A for what documents can't say. Suggested profile
+                                      changes are confirmed one by one.
+  jobsweep rank                       Score the last search's survivors 1–5 against candidate.md with reasons; cached per
+                                      posting so re-runs only pay for new postings. Then \`jobsweep ui\` shows them.
+  Configure: JOBSWEEP_MODEL or "model" in profile.json = openai:<model> | anthropic:<model>, plus OPENAI_API_KEY
+  (OPENAI_BASE_URL for OpenRouter/Ollama/LM Studio) or ANTHROPIC_API_KEY in ${configDir()}/.env.
+
+Config lives in ${configDir()} (override with JOBSWEEP_HOME): profile.json, candidate.md, companies.json, metros.json, .env, jobsweep.db, digests/, ui/
 
 SEARCH FLAGS
   -l, --city <text>        City. Repeatable. Required unless the profile sets cities.
@@ -236,35 +249,99 @@ async function ui(argv: string[]): Promise<number> {
   return 0
 }
 
+/** The configured model, or a clear failure naming how to configure one. */
+function requireModel(profile: Profile | null): Model {
+  try {
+    const m = configureModel(profile?.model)
+    if (!m) fail(MODEL_HELP, "NO_MODEL")
+    return m
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e), "MODEL_CONFIG")
+  }
+}
+
+function requireCandidate(): string {
+  const p = CANDIDATE_PATH()
+  if (!existsSync(p)) fail(`no candidate profile yet — run \`jobsweep interview\` (writes ${p})`, "NO_CANDIDATE")
+  return readFileSync(p, "utf8")
+}
+
+async function interviewCmd(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({
+    args: argv,
+    strict: true,
+    options: { resume: { type: "string" }, notes: { type: "string", multiple: true }, lifeos: { type: "boolean" }, "no-lifeos": { type: "boolean", default: false }, "max-questions": { type: "string", default: "8" }, profile: { type: "string" } },
+  })
+  const profile = await loadProfile(v.profile ?? PROFILE_PATH())
+  const model = requireModel(profile)
+  return interview({ model, resume: v.resume, notes: v.notes, lifeos: v["no-lifeos"] ? false : v.lifeos, maxQuestions: int("max-questions", v["max-questions"]) })
+}
+
+async function rank(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { format: { type: "string", short: "f", default: "table" }, limit: { type: "string" }, profile: { type: "string" } } })
+  const lastPath = join(DIGEST_DIR(), "last-search.json")
+  if (!existsSync(lastPath)) fail("no search yet — run `jobsweep search` first", "NO_SEARCH")
+  const last = (await Bun.file(lastPath).json()) as LastSearch
+  const profile = await loadProfile(v.profile ?? PROFILE_PATH())
+  const model = requireModel(profile)
+  const candidate = requireCandidate()
+  const fmt = v.format as Format
+  if (!FORMATS.includes(fmt)) fail(`--format must be one of ${FORMATS.join("|")}`, "BAD_ARG")
+
+  const store = new Store()
+  const ranked = await rankJobs(last.jobs, { model, candidate, cache: store, log: (m) => process.stderr.write(`# ${m}\n`) })
+  store.close()
+  await Bun.write(lastPath, JSON.stringify({ ...last, jobs: ranked }))
+
+  const limit = v.limit !== undefined ? int("limit", v.limit) : null
+  const sorted = sortByAi(ranked)
+  const shown = limit === null ? sorted : sorted.slice(0, limit)
+  if (fmt === "json") process.stdout.write(JSON.stringify(shown, null, 2) + "\n")
+  else process.stdout.write(renderRanked(shown, fmt === "md") + "\n")
+  process.stderr.write(`# reviews saved into ${lastPath}; \`jobsweep ui --open\` to triage with them\n`)
+  return 0
+}
+
 async function digest(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
     strict: true,
-    options: { top: { type: "string", default: "15" }, format: { type: "string", short: "f", default: "md" }, profile: { type: "string" }, companies: { type: "string" } },
+    options: { top: { type: "string", default: "15" }, format: { type: "string", short: "f", default: "md" }, rank: { type: "boolean", default: false }, profile: { type: "string" }, companies: { type: "string" } },
   })
   const profile = await loadProfile(v.profile ?? PROFILE_PATH())
   if (!profile) fail("digest needs a profile: run `jobsweep init`", "NO_PROFILE")
   if (!["md", "json"].includes(v.format)) fail(`--format must be md|json`, "BAD_ARG")
   const top = int("top", v.top)
+  // Resolve the model up front so a misconfiguration fails before the sweep, not after it.
+  const model = v.rank ? requireModel(profile) : null
+  const candidate = v.rank ? requireCandidate() : null
 
   const store = new Store()
   const result = await run(paramsFor(profile, {}), profile, makeCtx(await loadCompanies(v.companies ?? COMPANIES_PATH()), store), store)
+  // With --rank, only what's new gets reviewed: the digest's job is "what came in", and this bounds the model spend.
+  let jobs = result.jobs
+  if (model && candidate) {
+    const freshIds = new Set(Object.keys(result.newIds))
+    const reviewed = await rankJobs(jobs.filter((j) => freshIds.has(j.id)), { model, candidate, cache: store, log: (m) => process.stderr.write(`# ${m}\n`) })
+    const byId = new Map(reviewed.map((j) => [j.id, j]))
+    jobs = jobs.map((j) => byId.get(j.id) ?? j)
+  }
   store.close()
 
   const date = new Date().toISOString().slice(0, 10)
-  const fresh = result.jobs.filter((j) => result.newIds[j.id])
-  const withComp = sortByPay(result.jobs.filter((j) => j.salary))
+  const fresh = jobs.filter((j) => result.newIds[j.id])
+  const withComp = sortByPay(jobs.filter((j) => j.salary))
   const fmtTc = profile.minTc === null ? "any comp" : `≥ $${Math.round(profile.minTc / 1000)}k`
   const fmtYoe = profile.maxYoe === null ? "any experience" : `≤ ${profile.maxYoe} yrs`
-  const profileLine = `${profile.cities.join(", ")} · ${profile.queries.length} queries · ${fmtTc} · ${fmtYoe}${profile.days !== null ? ` · last ${profile.days}d` : ""} · ${result.jobs.length} open matches`
-  const d = { date, profileLine, fresh, topOpen: withComp.slice(0, top), totalOpen: result.jobs.length, carriedIds: result.carriedIds, dropped: result.dropped, errors: result.errors }
+  const profileLine = `${profile.cities.join(", ")} · ${profile.queries.length} queries · ${fmtTc} · ${fmtYoe}${profile.days !== null ? ` · last ${profile.days}d` : ""} · ${jobs.length} open matches`
+  const d = { date, profileLine, fresh, topOpen: withComp.slice(0, top), totalOpen: jobs.length, carriedIds: result.carriedIds, dropped: result.dropped, errors: result.errors }
 
   mkdirSync(DIGEST_DIR(), { recursive: true })
   const md = renderDigest(d)
   await Bun.write(join(DIGEST_DIR(), `${date}.md`), md + "\n")
-  await Bun.write(join(DIGEST_DIR(), "latest.json"), JSON.stringify({ ...d, all: result.jobs }, null, 2) + "\n")
-  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date, params: { cities: profile.cities, minTc: profile.minTc, maxYoe: profile.maxYoe, days: profile.days }, jobs: result.jobs, carriedIds: Object.keys(result.carriedIds) }))
-  process.stdout.write((v.format === "json" ? JSON.stringify({ ...d, all: result.jobs }, null, 2) : md) + "\n")
+  await Bun.write(join(DIGEST_DIR(), "latest.json"), JSON.stringify({ ...d, all: jobs }, null, 2) + "\n")
+  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date, params: { cities: profile.cities, minTc: profile.minTc, maxYoe: profile.maxYoe, days: profile.days }, jobs, carriedIds: Object.keys(result.carriedIds) }))
+  process.stdout.write((v.format === "json" ? JSON.stringify({ ...d, all: jobs }, null, 2) : md) + "\n")
   return 0
 }
 
@@ -377,6 +454,8 @@ const job =
   cmd === "init" ? init()
   : cmd === "search" ? search(rest)
   : cmd === "ui" ? ui(rest)
+  : cmd === "interview" ? interviewCmd(rest)
+  : cmd === "rank" ? rank(rest)
   : cmd === "digest" ? digest(rest)
   : cmd === "detail" ? detail(rest)
   : cmd === "companies" ? companies(rest)

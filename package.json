@@ -4,18 +4,28 @@
   "description": "Sweep company job boards, Adzuna, and freehire (optionally LinkedIn) for software jobs by city, comp, and years of experience. Local, no account, one-file triage UI.",
   "license": "MIT",
   "type": "module",
-  "bin": { "jobsweep": "./src/cli.ts" },
-  "files": ["src", "presets", "companies.seed.json", "README.md", "LICENSE"],
-  "engines": { "bun": ">=1.1" },
+  "bin": {
+    "jobsweep": "./src/cli.ts"
+  },
+  "files": ["src", "presets", "prompts", "companies.seed.json", "README.md", "LICENSE"],
+  "engines": {
+    "bun": ">=1.1"
+  },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build": "bun run scripts/build.ts"
   },
   "keywords": ["jobs", "job-search", "greenhouse", "lever", "ashby", "adzuna", "cli", "bun"],
-  "repository": { "type": "git", "url": "https://github.com/alphazaid/jobsweep" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alphazaid/jobsweep"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "unpdf": "^1.8.1"
   }
 }

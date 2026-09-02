@@ -33,6 +33,7 @@ interface UiJob {
   local: boolean
   pick: boolean
   desc: string
+  ai: { fit: number; reason: string; dealbreakers: string[]; emphasize: string[] } | null
 }
 
 const CSS = `
@@ -67,6 +68,10 @@ main{display:grid;grid-template-columns:minmax(420px,1fr) minmax(420px,1.1fr);mi
 .band .bar.est{background:repeating-linear-gradient(90deg,var(--mute) 0 3px,transparent 3px 6px)}
 .band .lab{position:absolute;top:24px;font-family:var(--mono);font-size:10.5px;color:var(--mute);white-space:nowrap}
 .band .none{position:absolute;top:10px;font-family:var(--mono);font-size:11px;color:var(--mute)}
+.ai{font-family:var(--mono);font-size:11px;color:#fff;background:var(--mute);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.ai[data-f="5"],.ai[data-f="4"]{background:var(--apply)}.ai[data-f="3"]{background:var(--maybe)}
+.aibox{border:1px solid var(--rule);border-left:3px solid var(--ink);border-radius:5px;padding:10px 12px;margin:0 0 16px;max-width:72ch;font-size:13.5px}
+.aibox b{font-weight:600}.aibox ul{margin:6px 0 0;padding-left:18px}.aibox .lab{font-family:var(--mono);font-size:11px;color:var(--mute);margin-right:6px}
 .y,.fi{font-family:var(--mono);font-size:12px;color:var(--mute);text-align:right;font-variant-numeric:tabular-nums}
 .y b,.fi b{color:var(--ink);font-weight:500}
 #detail{overflow:auto;padding:22px 28px 60px}
@@ -101,7 +106,8 @@ const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
 const k=n=>"$"+Math.round(n/1000)+"k";
 const SRC={linkedin:"LinkedIn",greenhouse:"Greenhouse",lever:"Lever",ashby:"Ashby",adzuna:"Adzuna",freehire:"freehire"};
 const LO=100000,HI=400000,pct=v=>Math.max(0,Math.min(100,(v-LO)/(HI-LO)*100));
-const ui={where:"all",comp:"all",status:"todo",fit:0,sort:HAS_PICKS?"pick":"comp",q:""};
+const HAS_AI=JOBS.some(j=>j.ai);
+const ui={where:"all",comp:"all",status:"todo",fit:0,sort:HAS_AI?"ai":HAS_PICKS?"pick":"comp",q:""};
 let selected=null;
 const st=id=>state[id]?.s||"";
 function visible(){
@@ -115,6 +121,7 @@ function visible(){
     return true;
   }).sort((a,b)=>{
     const c=j=>j.max??j.min??0;
+    if(ui.sort==="ai"){const d=(b.ai?.fit??0)-(a.ai?.fit??0);if(d)return d;}
     if(ui.sort==="pick"&&a.pick!==b.pick)return a.pick?-1:1;
     if(ui.sort==="fit"){const d=b.fit.length-a.fit.length;if(d)return d;}
     if(ui.sort==="posted")return (b.posted||"").localeCompare(a.posted||"");
@@ -133,7 +140,7 @@ function hl(text){let h=esc(text);for(const s of SKILLS){h=h.replace(new RegExp(
 function renderList(){
   const list=document.getElementById("list");const rows=visible();
   list.innerHTML=rows.map(j=>'<div class="row" role="option" tabindex="-1" data-id="'+esc(j.id)+'" data-s="'+st(j.id)+'" aria-selected="'+(j.id===selected)+'">'
-    +'<div class="st"></div><div><div class="t">'+esc(j.title)+(j.pick?'<span class="pk">pick</span>':"")+'</div><div class="c">'+esc(j.company||"—")+' · '+esc(j.location||"—")+'</div></div>'
+    +'<div class="st"></div><div><div class="t">'+esc(j.title)+(j.ai?'<span class="ai" data-f="'+j.ai.fit+'">'+j.ai.fit+'/5</span>':"")+(j.pick?'<span class="pk">pick</span>':"")+'</div><div class="c">'+esc(j.company||"—")+' · '+esc(j.location||"—")+'</div></div>'
     +band(j)+'<div class="y">'+(j.yoe!=null?"<b>"+j.yoe+"+</b> yrs":"~"+j.level)+'</div><div class="fi"><b>'+j.fit.length+'</b>/'+SKILLS.length+'</div></div>').join("");
   document.getElementById("shown").textContent=rows.length+" shown";
   const c={apply:0,maybe:0,applied:0,skip:0};for(const j of JOBS){const s=st(j.id);if(s)c[s]++;}
@@ -148,6 +155,9 @@ function renderDetail(){
    +'<div class="facts"><div>Comp<b>'+comp+'</b></div><div>Years required<b>'+(j.yoe!=null?j.yoe+"+ stated":"not stated (~"+j.level+" by title)")+'</b></div><div>Posted<b>'+(j.posted||"—")+'</b></div><div>Source<b>'+SRC[j.source]+'</b></div></div>'
    +'<div class="acts"><a class="open" href="'+esc(j.url)+'" target="_blank" rel="noopener">Open posting<kbd>o</kbd></a>'
    +'<button data-s="apply" aria-pressed="'+(s==="apply")+'">Apply<kbd>a</kbd></button><button data-s="maybe" aria-pressed="'+(s==="maybe")+'">Maybe<kbd>m</kbd></button><button data-s="applied" aria-pressed="'+(s==="applied")+'">Applied<kbd>d</kbd></button><button data-s="skip" aria-pressed="'+(s==="skip")+'">Skip<kbd>x</kbd></button></div>'
+   +(j.ai?'<div class="aibox"><span class="lab">AI fit</span><b>'+j.ai.fit+'/5 '+({5:"apply today",4:"apply",3:"maybe",2:"unlikely",1:"skip"}[j.ai.fit]||"")+'</b> — '+esc(j.ai.reason)
+     +(j.ai.dealbreakers.length?'<ul>'+j.ai.dealbreakers.map(d=>'<li><span class="lab">dealbreaker</span>'+esc(d)+'</li>').join("")+'</ul>':"")
+     +(j.ai.emphasize.length?'<ul>'+j.ai.emphasize.map(d=>'<li><span class="lab">lead with</span>'+esc(d)+'</li>').join("")+'</ul>':"")+'</div>':"")
    +'<div class="skills">'+SKILLS.map(sk=>'<span class="'+(j.fit.includes(sk)?"hit":"")+'">'+esc(sk)+'</span>').join("")+'</div>'
    +'<div class="note"><textarea placeholder="Notes for this posting">'+esc(state[j.id]?.n||"")+'</textarea></div>'
    +'<div class="desc" style="margin-top:16px">'+(j.desc?hl(j.desc):"<span style='color:var(--mute)'>No description captured — open the posting.</span>")+'</div>';
@@ -180,6 +190,7 @@ document.getElementById("export").onclick=e=>{e.preventDefault();const out=JOBS.
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:"application/json"}));a.download="job-decisions.json";a.click();};
 document.getElementById("reset").onclick=e=>{e.preventDefault();if(confirm("Clear every apply/maybe/skip/applied mark and note?")){state={};save();renderList();renderDetail();}};
 if(HAS_PICKS){document.getElementById("sort").insertAdjacentHTML("afterbegin",'<option value="pick">Picks first</option>');document.getElementById("sort").value="pick";}
+if(HAS_AI){document.getElementById("sort").insertAdjacentHTML("afterbegin",'<option value="ai">AI fit</option>');document.getElementById("sort").value="ai";}
 const first=renderList();if(first.length)select(first[0].id);
 `
 
@@ -206,6 +217,7 @@ export function renderUi(jobs: Job[], o: UiOptions): string {
     local: o.isLocal(j),
     pick: o.picks?.has(j.id) ?? false,
     desc: (j.description ?? "").slice(0, 12_000),
+    ai: j.ai ? { fit: j.ai.fit, reason: j.ai.reason, dealbreakers: j.ai.dealbreakers, emphasize: j.ai.emphasize } : null,
   }))
   // `</script>` inside a description would end the data block early.
   const json = (v: unknown) => JSON.stringify(v).replace(/<\//g, "<\\/")

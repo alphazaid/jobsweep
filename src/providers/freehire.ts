@@ -74,6 +74,7 @@ function toJob(j: FhJob): Job {
     yoeMin: parseYoe(description),
     level: levelFromTitle(j.title),
     fit: null,
+    ai: null,
     description,
   }
 }

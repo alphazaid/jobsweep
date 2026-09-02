@@ -56,6 +56,7 @@ function toJob(company: Company, j: LeverPosting): Job {
     yoeMin: parseYoe(description),
     level: levelFromTitle(j.text),
     fit: null,
+    ai: null,
     description,
   }
 }

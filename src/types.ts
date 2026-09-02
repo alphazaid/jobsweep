@@ -44,6 +44,18 @@ export interface Job {
   description: string | null
   /** Profile skills found in the posting text; null when no profile skills are configured. */
   fit: { matched: string[]; total: number } | null
+  /** Model review from `jobsweep rank`; null until ranked. */
+  ai: AiReview | null
+}
+
+/** What a model concluded about one posting for one candidate. */
+export interface AiReview {
+  /** 1 skip … 5 apply today. */
+  fit: number
+  reason: string
+  dealbreakers: string[]
+  emphasize: string[]
+  model: string
 }
 
 export interface SearchParams {

@@ -130,6 +130,7 @@ function toJob(card: Card, d: Detail | null): Job {
     yoeMin: parseYoe(d?.description),
     level: levelFromTitle(card.title),
     fit: null,
+    ai: null,
     description: d?.description ?? null,
   }
 }
