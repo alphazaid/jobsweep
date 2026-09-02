@@ -55,6 +55,11 @@ describe("matchedLocation", () => {
   test("bare 'United States' suffix is not remote", () => {
     expect(matchedLocation(job({ location: "San Mateo, CA, United States" }), base)).toBeNull()
   })
+  test("a Canada-remote posting never matches a US city search (Stripe Metronome case)", () => {
+    const j = job({ location: "Toronto, Vancouver, Canada-Remote", locations: ["Toronto, Vancouver, Canada-Remote"], workMode: "remote" })
+    expect(matchedLocation(j, base)).toBeNull()
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBeNull()
+  })
   test("remote=exclude drops remote and keeps on-site city", () => {
     const p = { ...base, remote: "exclude" as const }
     expect(matchedLocation(job({ location: "Remote - US" }), p)).toBeNull()
