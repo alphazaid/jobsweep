@@ -231,7 +231,7 @@ async function ui(argv: string[]): Promise<number> {
   mkdirSync(UI_DIR(), { recursive: true })
   const out = v.out ?? join(UI_DIR(), `jobs-${last.date}.html`)
   await Bun.write(out, html)
-  process.stdout.write(`${out}\n`)
+  process.stdout.write(`${out}\n# built from the search on ${last.date}: ${last.jobs.length} postings, ${cities.join(" / ")} — run \`jobsweep search\` first to refresh\n`)
   if (v.open) Bun.spawn([process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open", out], { stdout: "ignore", stderr: "ignore" })
   return 0
 }
@@ -385,4 +385,7 @@ const job =
   : cmd === undefined || cmd === "--help" || cmd === "-h" ? (process.stdout.write(HELP), Promise.resolve(cmd ? 0 : 1))
   : fail(`unknown command "${cmd}"`, "BAD_CMD")
 
-job.then((code) => process.exit(code)).catch((e) => fail(e instanceof Error ? e.message : String(e), "INTERNAL_ERROR"))
+// Never process.exit() after a large write: a piped stdout is truncated mid-JSON. Set the code and let the loop drain.
+job.then((code) => {
+  process.exitCode = code
+}).catch((e) => fail(e instanceof Error ? e.message : String(e), "INTERNAL_ERROR"))

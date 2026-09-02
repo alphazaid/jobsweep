@@ -53,6 +53,8 @@ describe("SWE_TITLE_RE", () => {
     "Design Verification (DV) Engineer - 2027 Grads",
     "Developer Relations Engineer (New York, NY)",
     "Developer Advocate, Platform",
+    "Response Engineer - CMDC",
+    "Engineer",
   ])("rejects %s", (t) => {
     expect(SWE_TITLE_RE.test(t)).toBe(false)
   })
