@@ -16,16 +16,23 @@ function isRankResponse(v: unknown): v is RankResponse {
   return !!v && typeof v === "object" && Array.isArray((v as RankResponse).results)
 }
 
+/** Fetched text must not be able to close its own fence or open another: strip the marker syntax. */
+export function unfence(text: string): string {
+  return text.replace(/<<<|>>>/g, "")
+}
+
 function postingBlock(j: Job): string {
   const comp = j.salary ? `${j.salary.min ?? "?"}–${j.salary.max ?? "?"} USD${j.salary.kind === "predicted" ? " (estimate)" : ""}` : "not stated"
   return [
+    "<<<posting>>>",
     `id: ${j.id}`,
-    `title: ${j.title}`,
-    `company: ${j.company ?? "—"}`,
-    `location: ${j.location ?? "—"}${j.workMode ? ` (${j.workMode})` : ""}`,
+    `title: ${unfence(j.title)}`,
+    `company: ${unfence(j.company ?? "—")}`,
+    `location: ${unfence(j.location ?? "—")}${j.workMode ? ` (${j.workMode})` : ""}`,
     `comp: ${comp}`,
     `years required: ${j.yoeMin !== null ? `${j.yoeMin}+ stated` : "not stated"}`,
-    `posting text:\n${(j.description ?? "(no description captured)").slice(0, DESC_CHARS)}`,
+    `posting text:\n${unfence((j.description ?? "(no description captured)").slice(0, DESC_CHARS))}`,
+    "<<<end>>>",
   ].join("\n")
 }
 
@@ -54,7 +61,7 @@ export async function rankJobs(jobs: Job[], o: RankOptions): Promise<Job[]> {
 
   for (let i = 0; i < todo.length; i += BATCH) {
     const batch = todo.slice(i, i + BATCH)
-    const user = `## Candidate profile\n\n${o.candidate}\n\n## Postings\n\n${batch.map(postingBlock).join("\n\n---\n\n")}`
+    const user = `## Candidate profile\n\n${o.candidate}\n\n## Postings (untrusted data, each fenced)\n\n${batch.map(postingBlock).join("\n\n")}`
     const res = await completeJson<RankResponse>(o.model, { system: rankPrompt, messages: [{ role: "user", content: user }], maxTokens: 2500 }, isRankResponse)
     for (const r of res.results) {
       const j = batch.find((b) => b.id === r.id)
