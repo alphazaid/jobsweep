@@ -13,7 +13,7 @@
     "build": "bun run scripts/build.ts"
   },
   "keywords": ["jobs", "job-search", "greenhouse", "lever", "ashby", "adzuna", "cli", "bun"],
-  "repository": { "type": "git", "url": "https://github.com/zaidmotiwala/jobsweep" },
+  "repository": { "type": "git", "url": "https://github.com/alphazaid/jobsweep" },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.6.0"
