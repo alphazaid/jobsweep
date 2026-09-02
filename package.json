@@ -14,7 +14,8 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build": "bun run scripts/build.ts"
+    "build": "bun run scripts/build.ts",
+    "smoke": "bun run scripts/smoke-binary.ts"
   },
   "keywords": ["jobs", "job-search", "greenhouse", "lever", "ashby", "adzuna", "cli", "bun"],
   "repository": {

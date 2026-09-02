@@ -26,6 +26,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - run: bun run smoke dist/jobsweep-*-linux-x64
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

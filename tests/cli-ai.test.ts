@@ -89,9 +89,11 @@ describe("interview → rank → ui through the CLI", () => {
   test("interview: asks, drafts, honors 'correct', then saves only on accept and confirms profile fields", async () => {
     // answers: the one question · "c" correct · correction text · "y" accept · then the profile prompts in key order
     // (cities unchanged → not asked; remote n · minTc y · maxYoe n · skills n)
-    const stdin = ["200k", "c", "I also use Java", "y", "n", "y", "n", "n"].join("\n") + "\n"
+    // "y" = continue (send the listed documents to the model) · then the question, correct, accept, profile prompts
+    const stdin = ["y", "200k", "c", "I also use Java", "y", "n", "y", "n", "n"].join("\n") + "\n"
     const r = await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], stdin)
     expect(r.code).toBe(0)
+    expect(r.out).toMatch(/will be sent, in full, to openai:scripted \(local server at http:\/\/127\.0\.0\.1/)
     expect(r.out).toMatch(/What comp floor/)
     expect(r.out).toMatch(/Corrected: also Java/)
     const candidate = readFileSync(join(home, "candidate.md"), "utf8")
@@ -101,13 +103,21 @@ describe("interview → rank → ui through the CLI", () => {
     expect(profile.maxYoe).toBeUndefined() // declined
   })
 
+  test("interview: declining to send documents makes no model call", async () => {
+    const before = requests
+    const r = await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], "n\n")
+    expect(r.code).toBe(1)
+    expect(r.out).toMatch(/Nothing sent/)
+    expect(requests).toBe(before)
+  })
+
   test("interview: declining the draft saves nothing", async () => {
     rmSync(join(home, "candidate.md"), { force: true })
-    const r = await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], "200k\nq\n")
+    const r = await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], "y\n200k\nq\n")
     expect(r.code).toBe(1)
     expect(existsSync(join(home, "candidate.md"))).toBe(false)
     // restore for the next tests
-    await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], "200k\ny\nn\nn\nn\nn\nn\nn\nn\n")
+    await cli(["interview", "--resume", join(home, "resume.md"), "--no-lifeos"], "y\n200k\ny\nn\nn\nn\nn\nn\nn\nn\n")
     expect(existsSync(join(home, "candidate.md"))).toBe(true)
   })
 
