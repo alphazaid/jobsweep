@@ -1,0 +1,12 @@
+{
+  "cities": ["New York, NY"],
+  "preset": "swe",
+  "minTc": "180k",
+  "maxYoe": 3,
+  "days": 14,
+  "remote": "include",
+  "sources": ["greenhouse", "lever", "ashby", "adzuna", "freehire"],
+  "skills": ["TypeScript", "React", "Go", "Java", "Python", "AWS", "Kubernetes", "PostgreSQL", "Kafka", "GraphQL"],
+  "exclude": ["clearance", "manager", "intern", "contract"],
+  "linkedinAccepted": false
+}

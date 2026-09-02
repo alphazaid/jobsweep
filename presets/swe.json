@@ -1,0 +1,8 @@
+{
+  "name": "swe",
+  "description": "Individual-contributor software engineering roles",
+  "titlePattern": "^(?!.*\\b(hardware|electrical|mechanical|civil|structural|chemical|process|manufacturing|qa|test|sales|solutions?|support|field|customer|network|security|cyber|data scientist|analyst|recruit\\w*|talent|acquisition|marketing|product manager|program manager|project manager|it systems|it operations|ux|devops|sre|site reliability|reverse engineering|vulnerability|integrity|verification|dv|research engineer|machine learning engineer|ml engineer|developer relations|devrel|advocate|evangelist)\\b)(?=.*\\b(software|backend|back-end|full[- ]?stack|front-?end|platform|infrastructure|infra|application|applications|systems|web|mobile|ios|android|api|cloud|distributed|core|product|founding|forward deployed|forward-deployed|ai|agent|agents|developer|engineer|swe|sde|member of technical staff|mts)\\b).*\\b(engineer|engineering|developer|programmer|swe|sde|technical staff|mts)\\b",
+  "queries": ["software engineer", "backend engineer", "full stack engineer", "frontend engineer", "platform engineer", "software developer"],
+  "skills": ["TypeScript", "JavaScript", "React", "Node", "Go", "Java", "Python", "Rust", "C++", "AWS", "GCP", "Kubernetes", "Docker", "PostgreSQL", "SQL", "Kafka", "REST", "GraphQL"],
+  "exclude": ["clearance", "manager", "intern", "contract"]
+}

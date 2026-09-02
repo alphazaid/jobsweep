@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+.env
+profile.json
+companies.json
+*.err
+*.log
+.DS_Store

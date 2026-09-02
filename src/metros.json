@@ -1,0 +1,17 @@
+{
+  "new york": ["new york", "nyc", "manhattan", "brooklyn", "queens", "jersey city", "hoboken"],
+  "san francisco": ["san francisco", "sf bay", "bay area", "south san francisco", "oakland", "menlo park", "palo alto", "mountain view", "sunnyvale", "san mateo", "redwood city", "san jose"],
+  "dallas": ["dallas", "plano", "irving", "frisco", "richardson", "addison", "dfw", "fort worth"],
+  "seattle": ["seattle", "bellevue", "redmond", "kirkland"],
+  "austin": ["austin", "round rock"],
+  "chicago": ["chicago", "evanston"],
+  "boston": ["boston", "cambridge, ma", "somerville", "waltham"],
+  "los angeles": ["los angeles", "santa monica", "culver city", "venice", "playa vista", "el segundo", "pasadena", "irvine"],
+  "denver": ["denver", "boulder"],
+  "washington": ["washington, dc", "washington dc", "arlington, va", "mclean", "reston", "bethesda"],
+  "atlanta": ["atlanta", "alpharetta"],
+  "miami": ["miami", "fort lauderdale", "boca raton"],
+  "philadelphia": ["philadelphia", "philly"],
+  "toronto": ["toronto", "mississauga"],
+  "london": ["london"]
+}
