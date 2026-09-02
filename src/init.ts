@@ -52,7 +52,6 @@ export async function init(): Promise<number> {
   out("\nSources. Company boards (Greenhouse, Lever, Ashby), Adzuna and freehire use public or official APIs.")
   out(LINKEDIN_NOTICE)
   const linkedin = yes("Enable the LinkedIn connector for your own personal search?", existing.linkedinAccepted === true)
-  const sources = ["greenhouse", "lever", "ashby", "adzuna", "freehire", ...(linkedin ? ["linkedin"] : [])]
 
   const envPath = ENV_PATH()
   const env: Record<string, string> = {}
@@ -60,7 +59,9 @@ export async function init(): Promise<number> {
   out("\nAdzuna is a job aggregator with a free official API (https://developer.adzuna.com). Leave blank to skip it.")
   const adzId = ask("ADZUNA_APP_ID", env.ADZUNA_APP_ID ?? "")
   const adzKey = adzId ? ask("ADZUNA_APP_KEY", env.ADZUNA_APP_KEY ?? "") : ""
-
+  const adzuna = !!(adzId && adzKey)
+  if (adzId && !adzKey) out("  no key given — Adzuna left off; re-run init to add it.")
+  const sources = ["greenhouse", "lever", "ashby", ...(adzuna ? ["adzuna"] : []), "freehire", ...(linkedin ? ["linkedin"] : [])]
   const profile = {
     cities,
     preset: DEFAULT_PRESET.name,

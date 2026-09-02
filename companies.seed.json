@@ -135,11 +135,6 @@
     "slug": "cssmerge"
   },
   {
-    "name": "Attain Talent",
-    "ats": "greenhouse",
-    "slug": "attaintalent"
-  },
-  {
     "name": "Avride",
     "ats": "greenhouse",
     "slug": "avride"
@@ -158,11 +153,6 @@
     "name": "beaconai",
     "ats": "ashby",
     "slug": "beaconai"
-  },
-  {
-    "name": "Bedrock Talent",
-    "ats": "ashby",
-    "slug": "bedrock-talent"
   },
   {
     "name": "bellese",
@@ -728,11 +718,6 @@
     "name": "Jito Labs",
     "ats": "ashby",
     "slug": "jito-labs"
-  },
-  {
-    "name": "jobgether",
-    "ats": "lever",
-    "slug": "jobgether"
   },
   {
     "name": "Justworks",
@@ -1568,11 +1553,6 @@
     "name": "UpDoc",
     "ats": "ashby",
     "slug": "updoc"
-  },
-  {
-    "name": "UTA Ventures",
-    "ats": "ashby",
-    "slug": "united-talent-agency"
   },
   {
     "name": "van den Boom & Associates",

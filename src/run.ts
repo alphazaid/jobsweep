@@ -100,7 +100,7 @@ export async function run(paramsPerCity: SearchParams[], profile: Pick<Profile, 
       // and never carry a posting whose date is unknown — the window can't be checked.
       const prior = store
         .recent(`${s}:`, since)
-        .filter((j) => !liveIds[j.id] && j.postedAt !== null && withinDays(j.postedAt, p.days ?? DEFAULT_CARRY_DAYS))
+        .filter((j) => !liveIds[j.id] && j.postedAt !== null && withinDays(j.postedAt, p.days ?? DEFAULT_CARRY_DAYS, store.now()))
       if (!prior.length) continue
       // Re-confirm each carried posting is still open before it is shown as such.
       const provider = ctx.providers?.[s] ?? PROVIDERS[s]

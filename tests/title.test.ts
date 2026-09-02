@@ -22,6 +22,8 @@ describe("SWE_TITLE_RE", () => {
     "SDE II",
     "iOS Engineer",
     "Developer, Payments",
+    "Cloud Engineer",
+    "Infrastructure Engineer, Kubernetes",
   ])("accepts %s", (t) => {
     expect(SWE_TITLE_RE.test(t)).toBe(true)
   })

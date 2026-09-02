@@ -36,8 +36,7 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | Source | How | Comp data | Notes |
 |---|---|---|---|
 | Greenhouse, Lever, Ashby boards | each company's public board API | Ashby/Lever structured; Greenhouse parsed from text | `companies discover` finds boards for your cities via freehire; `companies --verify` checks them |
-| Adzuna | official API, your free key | posted or estimated (marked `est`) | https://developer.adzuna.com |
-| freehire.me | public API | enrichment | tech-only aggregator; also the discovery source for boards |
+| freehire.me | public JSON API (its `/agent/jobs/search` endpoint) | enrichment | open-source aggregator ("no walls", MIT backend, self-hostable via `FREEHIRE_API_URL`); it publishes no rate-limit terms, so keep volume modest |
 | LinkedIn | **off by default** — see below | parsed from the posting | |
 
 ### LinkedIn
@@ -47,8 +46,8 @@ LinkedIn has no public job API. The connector reads LinkedIn's public guest job 
 ## How filtering works
 
 - **Title gate.** Every result must look like an IC software role (`presets/swe.json`): "Backend Engineer", "Member of Technical Staff", "Founding Engineer" pass; Sales/Solutions/QA/Hardware/DevOps/ML/Recruiter titles don't. Override with `titlePattern` in the profile or `--title-re`.
-- **Comp.** `minTc` is compared to the **top** of the posted band. Postings that state no pay are kept in their own section, never silently dropped — outside NY/CA/WA/CO most companies don't post it. `--strict-comp` drops them.
 - **Years.** The first "N+ years … experience" requirement is parsed (largest one inside a qualifications block). Unstated → inferred from the title (entry 0 / mid 2 / senior 5 / staff-lead-manager 8).
+- **Age.** Company-board postings older than 90 days are never returned, whatever `days` says — boards keep evergreen reqs open for years. `days` narrows within that.
 - **City.** Metro aliases (`src/metros.json`; add your own in `~/.config/jobsweep/metros.json`) so "New York" matches Brooklyn and Jersey City. Remote-US is included by default; `remote: only | exclude`.
 - **Dedupe.** The same posting seen on LinkedIn, freehire, and the company's own board collapses to the copy with the best data; the company board wins over aggregators, which sometimes mislabel locations.
 - **Memory.** Postings are remembered in SQLite. LinkedIn's search returns a different sample every call, so postings it showed you recently are carried forward (marked `°`) after being re-checked as still open.

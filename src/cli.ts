@@ -43,7 +43,7 @@ SEARCH FLAGS
                            entry 0, mid 2, senior 5, staff/principal/lead/manager 8).
   --level <list>           intern,entry,mid,senior,staff
   --remote <mode>          include (default: city + remote-US) | only | exclude
-  --days <n>               Posted within n days.
+  --days <n>               Posted within n days. Company-board postings older than 90 days are never returned.
   --sources <list>         Subset of: ${ALL_SOURCES.join(",")}
   --linkedin               Enable the LinkedIn connector for this run (personal use; see \`jobsweep init\`).
   --per-source <n>         Results per query per source before filtering (default 50).
@@ -232,7 +232,7 @@ async function ui(argv: string[]): Promise<number> {
   const out = v.out ?? join(UI_DIR(), `jobs-${last.date}.html`)
   await Bun.write(out, html)
   process.stdout.write(`${out}\n# built from the search on ${last.date}: ${last.jobs.length} postings, ${cities.join(" / ")} — run \`jobsweep search\` first to refresh\n`)
-  if (v.open) Bun.spawn([process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open", out], { stdout: "ignore", stderr: "ignore" })
+  if (v.open) Bun.spawn(process.platform === "win32" ? ["cmd", "/c", "start", "", out] : [process.platform === "darwin" ? "open" : "xdg-open", out], { stdout: "ignore", stderr: "ignore" })
   return 0
 }
 

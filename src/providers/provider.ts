@@ -31,10 +31,10 @@ export interface Provider {
 /** Board feeds are company-wide; cache them so a 4 MB Greenhouse dump is fetched once per TTL. */
 export const FEED_TTL_MS = 6 * 60 * 60 * 1000
 
-export function withinDays(iso: string | null, days: number | null): boolean {
+export function withinDays(iso: string | null, days: number | null, now: number = Date.now()): boolean {
   if (days === null || !iso) return true
   const t = Date.parse(iso)
-  return Number.isNaN(t) || Date.now() - t <= days * 86_400_000
+  return Number.isNaN(t) || now - t <= days * 86_400_000
 }
 
 /** Union of per-query result lists, deduped by job id, preserving first-seen order. */

@@ -31,6 +31,10 @@ export class Store implements FeedCache {
     `)
     // Nothing reads a cache row older than the longest TTL (LinkedIn details, 14 d); drop them so the file stays small.
     this.db.query("DELETE FROM feeds WHERE fetched_at < ?").run(this.now() - 15 * 86_400_000)
+    // Board rows from before title-gated caching used bare `source:slug` keys and held whole raw feeds (hundreds of MB).
+    // Nothing reads them now; drop them and reclaim the space once.
+    const legacy = this.db.query("DELETE FROM feeds WHERE key GLOB '[a-z]*:*' AND key NOT LIKE '%:%:%' AND key NOT LIKE 'linkedin:%'").run()
+    if (legacy.changes > 0) this.db.exec("VACUUM")
   }
 
   /** Drop every cached feed/detail (postings and their seen-dates are kept) and reclaim the space. */
