@@ -209,7 +209,7 @@ export function renderUi(jobs: Job[], o: UiOptions): string {
     title: j.title,
     company: j.company,
     location: j.location,
-    url: j.url,
+    url: /^https?:\/\//i.test(j.url) ? j.url : "",
     source: j.source,
     posted: j.postedAt?.slice(0, 10) ?? null,
     min: j.salary?.min ?? null,

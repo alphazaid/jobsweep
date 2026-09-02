@@ -17,7 +17,7 @@ import { defaultSources, loadEnv, loadProfile, parseMoney, type Profile } from "
 import { PROVIDERS } from "./providers/index.ts"
 import type { ProviderCtx } from "./providers/provider.ts"
 import { rankJobs, sortByAi } from "./rank.ts"
-import { readLastSearch, startServer } from "./serve.ts"
+import { readLastSearch, startServer, statsOf, summaryText } from "./serve.ts"
 import { toCsv, toRows } from "./export.ts"
 import { run } from "./run.ts"
 import { AGENCY_RE, ALL_SOURCES, DEFAULT_QUERIES, LEVELS, SWE_TITLE_RE, type Company, type Job, type Level, type SearchParams, type Source } from "./types.ts"
@@ -34,9 +34,9 @@ USAGE
   jobsweep companies [--verify]       List company boards; --verify hits each one live.
   jobsweep companies discover         Add every Greenhouse/Lever/Ashby board hiring in your cities (via freehire).
   jobsweep cache [clear]              Show cache size, or drop cached feeds.
-  jobsweep serve [--port 4747] [--open]
-                                      Local dashboard: stats, history, run-search button with live log, triage page with
+  jobsweep serve [-p 4747] [--open]   Local dashboard: stats, history, run-search button with live log, triage page with
                                       server-kept marks, CSV/JSON export. Binds 127.0.0.1 only.
+  jobsweep serve -s | -j              The same numbers on the console (summary / JSON), no server.
   jobsweep export [--csv|--json] [--out <file>]
                                       Every posting from the last search with comp, years, fit, AI review, your decision, URL.
 
@@ -443,7 +443,15 @@ async function companies(argv: string[]): Promise<number> {
 }
 
 async function serve(argv: string[]): Promise<number> {
-  const { values: v } = parseArgs({ args: argv, strict: true, options: { port: { type: "string", default: "4747" }, open: { type: "boolean", default: false }, profile: { type: "string" } } })
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { port: { type: "string", short: "p", default: "4747" }, open: { type: "boolean", default: false }, json: { type: "boolean", short: "j", default: false }, summary: { type: "boolean", short: "s", default: false }, profile: { type: "string" } } })
+  if (v.json || v.summary) {
+    // Console modes, like `omp stats -j` / `-s`: same numbers as the page, no server.
+    const store = new Store()
+    const stats = statsOf(await readLastSearch(), store)
+    store.close()
+    process.stdout.write(v.json ? JSON.stringify(stats, null, 2) + "\n" : summaryText(stats))
+    return 0
+  }
   const profile = await loadProfile(v.profile ?? PROFILE_PATH())
   const port = int("port", v.port)
   // Relaunch this same entrypoint for "Run search now" — works from source (`bun run src/cli.ts`) and from the compiled binary alike.

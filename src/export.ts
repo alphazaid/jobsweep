@@ -46,11 +46,16 @@ export function toRows(jobs: Job[], decisions: Record<string, Decision>): Export
   }))
 }
 
-/** RFC 4180: quote when a field has a comma, quote, or newline; double embedded quotes. Numbers and nulls unquoted. */
-function csvCell(v: string | number | null): string {
+/**
+ * RFC 4180: quote when a field has a comma, quote, or newline; double embedded quotes. Numbers and nulls unquoted.
+ * Titles, companies, and notes come from the web or the user: a cell starting with `=`, `+`, `-`, `@`, tab, or CR
+ * would run as a formula in Excel/Sheets, so such cells get a leading apostrophe (the spreadsheet convention for "text").
+ */
+export function csvCell(v: string | number | null): string {
   if (v === null) return ""
   if (typeof v === "number") return String(v)
-  return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  const text = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
 export function toCsv(rows: ExportRow[]): string {

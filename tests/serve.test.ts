@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Store } from "../src/db.ts"
-import { toCsv, toRows } from "../src/export.ts"
+import { csvCell, toCsv, toRows } from "../src/export.ts"
+import { isHttpUrl } from "../src/text.ts"
 import { startServer } from "../src/serve.ts"
 import type { Job } from "../src/types.ts"
 
@@ -22,23 +23,58 @@ describe("export", () => {
     expect(lines[2]).toContain('"Multi\nLine"')
     expect(lines[2]).toContain(",,,,2,") // compMin, compMax, compKind empty for no salary
   })
+
+  test("cells that a spreadsheet would run as formulas are neutralised", () => {
+    expect(csvCell("=1+1")).toBe("'=1+1")
+    expect(csvCell('=HYPERLINK("http://x")')).toBe(`"'=HYPERLINK(""http://x"")"`)
+    expect(csvCell("+1 (555)")).toBe("'+1 (555)")
+    expect(csvCell("-senior")).toBe("'-senior")
+    expect(csvCell("@acme")).toBe("'@acme")
+    expect(csvCell("Engineer")).toBe("Engineer")
+    expect(csvCell(-5)).toBe("-5")
+  })
+  test("only http(s) posting URLs are accepted", () => {
+    expect(isHttpUrl("https://jobs.example.com/1")).toBe(true)
+    expect(isHttpUrl("javascript:alert(1)")).toBe(false)
+    expect(isHttpUrl("data:text/html,hi")).toBe(false)
+    expect(isHttpUrl("/relative")).toBe(false)
+  })
 })
 
 describe("store history + decisions", () => {
-  test("runs are recorded oldest→newest; decisions upsert and clear", () => {
+  test("runs are recorded oldest→newest, same-millisecond runs both kept; decisions upsert and clear", () => {
     const dir = mkdtempSync(join(tmpdir(), "jobsweep-store-"))
     let clock = 1_000
     const s = new Store(join(dir, "t.db"), () => clock)
     s.recordRun({ cities: ["A"], total: 10, withComp: 4, newCount: 10, carried: 0 })
+    s.recordRun({ cities: ["A"], total: 11, withComp: 4, newCount: 1, carried: 0 })
     clock += 60_000
     s.recordRun({ cities: ["A"], total: 12, withComp: 5, newCount: 2, carried: 3 })
-    expect(s.runs().map((r) => r.total)).toEqual([10, 12])
+    expect(s.runs().map((r) => r.total)).toEqual([10, 11, 12])
     s.setDecision("j1", "apply", "")
     s.setDecision("j1", "applied", "sent 9/2")
     s.setDecision("j2", "skip", "")
     expect(s.decisions()).toMatchObject({ j1: { status: "applied", note: "sent 9/2" }, j2: { status: "skip" } })
     s.setDecision("j2", "", "")
     expect(Object.keys(s.decisions())).toEqual(["j1"])
+    s.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe("store migration", () => {
+  test("a runs table keyed by ts alone is rebuilt with an id and keeps its rows", () => {
+    const dir = mkdtempSync(join(tmpdir(), "jobsweep-mig-"))
+    const path = join(dir, "t.db")
+    const { Database } = require("bun:sqlite") as typeof import("bun:sqlite")
+    const raw = new Database(path)
+    raw.exec("CREATE TABLE runs (ts INTEGER PRIMARY KEY, cities TEXT NOT NULL, total INTEGER NOT NULL, with_comp INTEGER NOT NULL, new_count INTEGER NOT NULL, carried INTEGER NOT NULL)")
+    raw.exec("INSERT INTO runs VALUES (5, 'A', 7, 3, 7, 0)")
+    raw.close()
+    const s = new Store(path, () => 6)
+    s.recordRun({ cities: ["A"], total: 8, withComp: 3, newCount: 1, carried: 2 })
+    expect(s.runs().map((r) => [r.ts, r.total])).toEqual([[5, 7], [6, 8]])
+    expect(s.runs().map((r) => r.cities)).toEqual([["A"], ["A"]])
     s.close()
     rmSync(dir, { recursive: true, force: true })
   })

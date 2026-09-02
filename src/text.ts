@@ -140,3 +140,13 @@ export function workModeFrom(...hints: Array<string | null | undefined>): WorkMo
   if (/\bon-?site\b|in[- ]office/.test(s)) return "onsite"
   return null
 }
+
+/** True for absolute http(s) URLs only; `javascript:`, `data:`, relative paths, and garbage all fail. */
+export function isHttpUrl(u: string): boolean {
+  try {
+    const p = new URL(u).protocol
+    return p === "http:" || p === "https:"
+  } catch {
+    return false
+  }
+}

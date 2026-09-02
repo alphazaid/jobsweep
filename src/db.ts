@@ -15,6 +15,9 @@ export class Store implements FeedCache {
   ) {
     mkdirSync(dirname(path), { recursive: true })
     this.db = new Database(path)
+    // A first cut keyed runs by timestamp alone; two runs in one millisecond overwrote each other. Rebuild with an id.
+    const runsCols = this.db.query<{ name: string }, []>("PRAGMA table_info(runs)").all().map((c) => c.name)
+    if (runsCols.length && !runsCols.includes("id")) this.db.exec("ALTER TABLE runs RENAME TO runs_v0")
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS jobs (
@@ -29,13 +32,15 @@ export class Store implements FeedCache {
         body TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS runs (
-        ts INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
         cities TEXT NOT NULL,
         total INTEGER NOT NULL,
         with_comp INTEGER NOT NULL,
         new_count INTEGER NOT NULL,
         carried INTEGER NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS runs_ts ON runs (ts);
       CREATE TABLE IF NOT EXISTS decisions (
         job_id TEXT PRIMARY KEY,
         status TEXT NOT NULL,
@@ -43,6 +48,9 @@ export class Store implements FeedCache {
         updated_at INTEGER NOT NULL
       );
     `)
+    if (runsCols.length && !runsCols.includes("id")) {
+      this.db.exec("BEGIN; INSERT INTO runs (ts, cities, total, with_comp, new_count, carried) SELECT ts, cities, total, with_comp, new_count, carried FROM runs_v0 ORDER BY ts; DROP TABLE runs_v0; COMMIT;")
+    }
     // Nothing reads a cache row older than the longest TTL (LinkedIn details, 14 d); drop them so the file stays small.
     this.db.query("DELETE FROM feeds WHERE fetched_at < ?").run(this.now() - 15 * 86_400_000)
     // Board rows from before title-gated caching used bare `source:slug` keys and held whole raw feeds (hundreds of MB).
@@ -56,16 +64,16 @@ export class Store implements FeedCache {
     this.db.exec("DELETE FROM feeds; VACUUM;")
   }
 
-  /** One row per completed search, for the dashboard's history. */
+  /** One row per completed search, for the dashboard's history. Two runs in the same millisecond both survive. */
   recordRun(r: Omit<RunSummary, "ts">): void {
     this.db
-      .query("INSERT OR REPLACE INTO runs (ts, cities, total, with_comp, new_count, carried) VALUES (?, ?, ?, ?, ?, ?)")
+      .query("INSERT INTO runs (ts, cities, total, with_comp, new_count, carried) VALUES (?, ?, ?, ?, ?, ?)")
       .run(this.now(), r.cities.join(" | "), r.total, r.withComp, r.newCount, r.carried)
   }
 
   runs(limit = 60): RunSummary[] {
     return this.db
-      .query<{ ts: number; cities: string; total: number; with_comp: number; new_count: number; carried: number }, [number]>("SELECT * FROM runs ORDER BY ts DESC LIMIT ?")
+      .query<{ ts: number; cities: string; total: number; with_comp: number; new_count: number; carried: number }, [number]>("SELECT ts, cities, total, with_comp, new_count, carried FROM runs ORDER BY ts DESC, id DESC LIMIT ?")
       .all(limit)
       .reverse()
       .map((r) => ({ ts: r.ts, cities: r.cities.split(" | "), total: r.total, withComp: r.with_comp, newCount: r.new_count, carried: r.carried }))

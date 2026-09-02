@@ -3,6 +3,7 @@ import { applyFilters, dedupe, type FilterResult } from "./filters.ts"
 import type { Profile } from "./profile.ts"
 import { PROVIDERS } from "./providers/index.ts"
 import { withinDays, type ProviderCtx } from "./providers/provider.ts"
+import { isHttpUrl } from "./text.ts"
 import { AGENCY_RE, ProviderError, type Job, type SearchParams, type Source } from "./types.ts"
 
 export interface RunResult {
@@ -85,7 +86,8 @@ export async function run(paramsPerCity: SearchParams[], profile: Pick<Profile, 
   }
 
   for (const p of paramsPerCity) keep(applyFilters(dedupe(await fetchAll(p, ctx, errors)), p), byId)
-  const live = scoreFit(dedupe(Object.values(byId)), profile.skills)
+  // Provider URLs are fetched text. Only http(s) links reach the UI's "Open posting" and the exports; anything else is junk.
+  const live = scoreFit(dedupe(Object.values(byId).filter((j) => isHttpUrl(j.url))), profile.skills)
   const newIds = store.record(live)
 
   const carriedById: Record<string, Job> = {}

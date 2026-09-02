@@ -40,6 +40,40 @@ export interface ServeOptions {
   log: (m: string) => void
 }
 
+const RUN_TIMEOUT_MS = 15 * 60_000
+
+/** The numbers behind the dashboard's cards, for `serve --json` / `--summary` and /api/stats.json. */
+export function statsOf(last: LastSearch | null, store: Store) {
+  const jobs = last?.jobs ?? []
+  const decisions = store.decisions()
+  const count = (s: string) => jobs.filter((j) => decisions[j.id]?.status === s).length
+  const ceilings = jobs.map((j) => j.salary?.max ?? j.salary?.min).filter((n): n is number => n != null).sort((a, b) => a - b)
+  return {
+    date: last?.date ?? null,
+    cities: last?.params.cities ?? [],
+    open: jobs.length,
+    new: last?.newIds?.length ?? 0,
+    carried: last?.carriedIds?.length ?? 0,
+    withComp: ceilings.length,
+    medianCeiling: ceilings.length ? ceilings[Math.floor(ceilings.length / 2)]! : null,
+    reviewed: jobs.filter((j) => j.ai).length,
+    decisions: { apply: count("apply"), maybe: count("maybe"), applied: count("applied"), skip: count("skip"), toReview: jobs.length - count("apply") - count("maybe") - count("applied") - count("skip") },
+    runs: store.runs(),
+  }
+}
+
+export function summaryText(s: ReturnType<typeof statsOf>): string {
+  if (!s.date) return "No search yet - run `jobsweep search` first.\n"
+  const k = (n: number | null) => (n == null ? "-" : `$${Math.round(n / 1000)}k`)
+  return [
+    `jobsweep · ${s.cities.join(" / ")} · last search ${s.date}`,
+    `  open ${s.open} · new ${s.new} · carried ${s.carried}`,
+    `  with comp ${s.withComp} (${s.open ? Math.round((s.withComp / s.open) * 100) : 0}%) · median ceiling ${k(s.medianCeiling)}`,
+    `  apply ${s.decisions.apply} · maybe ${s.decisions.maybe} · applied ${s.decisions.applied} · skipped ${s.decisions.skip} · to review ${s.decisions.toReview}`,
+    `  AI reviewed ${s.reviewed} · runs recorded ${s.runs.length}`,
+  ].join("\n") + "\n"
+}
+
 export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
   const run: RunState = { proc: null, lines: [], done: true, listeners: new Set() }
 
@@ -54,6 +88,13 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
     run.done = false
     const proc = Bun.spawn(o.searchCommand, { stdout: "ignore", stderr: "pipe", env: process.env })
     run.proc = proc
+    // A wedged provider must not leave the button stuck on "running…" and /api/run answering 409 forever.
+    const deadline = setTimeout(() => {
+      if (!run.done) {
+        emit(`search exceeded ${RUN_TIMEOUT_MS / 60_000} minutes; killed`)
+        proc.kill()
+      }
+    }, RUN_TIMEOUT_MS)
     ;(async () => {
       const reader = proc.stderr.getReader()
       const dec = new TextDecoder()
@@ -70,6 +111,7 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
       }
       if (buf) emit(buf)
       const code = await proc.exited
+      clearTimeout(deadline)
       emit(code === 0 ? "search finished" : `search exited with code ${code}`)
       run.done = true
       emit(null)
@@ -141,10 +183,7 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
           store.setDecision(body.id.slice(0, 300), status as DecisionStatus | "", note)
           return json({ ok: true })
         }
-        if (path === "/api/stats.json") {
-          const jobs = last?.jobs ?? []
-          return json({ date: last?.date ?? null, open: jobs.length, withComp: jobs.filter((j) => j.salary).length, reviewed: jobs.filter((j) => j.ai).length, decisions: store.decisions(), runs: store.runs() })
-        }
+        if (path === "/api/stats.json") return json(statsOf(last, store))
         if (path === "/api/run" && req.method === "POST") {
           if (!startRun()) return new Response("a search is already running", { status: 409 })
           return json({ started: true })
