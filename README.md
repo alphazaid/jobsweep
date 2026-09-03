@@ -59,7 +59,7 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | `jobsweep serve [-p 4747] [--open]` | Local dashboard server (see [Dashboard](#dashboard)). `-s` prints a console summary, `-j` the same as JSON, no server. |
 | `jobsweep export [--csv\|--json] [--out <file>]` | Every posting from the last search with comp, years, fit, AI review, your decision, URL (see [Export](#export)). |
 | `jobsweep ui [--open]` | Standalone one-file triage page (`~/.config/jobsweep/ui/jobs-<date>.html`) — works offline with marks in the browser's localStorage. The served `/triage` page is the same UI with marks kept server-side. |
-| `jobsweep digest [--top <n>] [--rank] [--notify]` | Run the profile, write `digests/<date>.md` + `latest.json`, print the digest; `--notify` posts a desktop notification. What `schedule` runs. |
+| `jobsweep digest [--top <n>] [--rank] [--notify]` | Run the profile, write `digests/<date>.md` + `latest.json`, print the digest; `--notify` posts a desktop notification when there are new postings. What `schedule` runs. |
 | `jobsweep schedule --every <30m\|6h\|1d> \| --daily HH:MM` | Run the digest on an OS timer (launchd / systemd user timer / Task Scheduler). `--status`, `--remove`. |
 | `jobsweep detail <id>` | Full posting JSON, e.g. `greenhouse:stripe:7532733`, `linkedin:4300011451`. |
 | `jobsweep companies [--verify]` | List company boards; `--verify` hits each one live (never touches the cache). |
@@ -280,7 +280,7 @@ jobsweep schedule --status
 jobsweep schedule --remove
 ```
 
-Uses what the OS already has — a launchd agent on macOS (`~/Library/LaunchAgents/com.jobsweep.digest.plist`), a systemd user timer on Linux (`~/.config/systemd/user/jobsweep-digest.timer`), Task Scheduler on Windows — so nothing of jobsweep's stays resident: the OS wakes the CLI, it runs `jobsweep digest --notify`, it exits. The launcher is written as an absolute path (schedulers run with almost no `PATH`). Each run writes `digests/<date>.md` + `latest.json`, records a row for the dashboard's history chart, and posts a desktop notification ("3 new postings · 349 open"; macOS and Linux with `notify-send`). Output goes to `~/.config/jobsweep/digests/schedule.log` (`journalctl --user -u jobsweep-digest` on Linux). Re-running `schedule` replaces the previous timer.
+Uses what the OS already has — a launchd agent on macOS (`~/Library/LaunchAgents/com.jobsweep.digest.plist`), a systemd user timer on Linux (`~/.config/systemd/user/jobsweep-digest.timer`), Task Scheduler on Windows — so nothing of jobsweep's stays resident: the OS wakes the CLI, it runs `jobsweep digest --notify`, it exits. The launcher is written as an absolute path (schedulers run with almost no `PATH`). Each run writes `digests/<date>.md` + `latest.json`, records a row for the dashboard's history chart, and posts a desktop notification only when it found something ("3 new postings · 349 open"; macOS, and Linux with `notify-send`) — a quiet run stays quiet. Output goes to `~/.config/jobsweep/digests/schedule.log` (`journalctl --user -u jobsweep-digest` on Linux). Re-running `schedule` replaces the previous timer.
 
 Prefer your own cron? `jobsweep digest` is the command to point it at. Add `--rank` to have a configured model review only the new postings each run. For an always-on dashboard, run `jobsweep serve` under the same scheduler with a keep-alive, or just leave it in a terminal.
 

@@ -122,9 +122,11 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
   const json = (v: unknown, status = 200) => new Response(JSON.stringify(v, null, 2), { status, headers: { "Content-Type": "application/json; charset=utf-8" } })
   const html = (s: string) => new Response(s, { headers: { "Content-Type": "text/html; charset=utf-8" } })
 
-  return Bun.serve({
+  const server = Bun.serve({
     hostname: "127.0.0.1",
     port: o.port,
+    // Page and API requests are quick; the run stream opts out per-request below (server.timeout(req, 0)).
+    idleTimeout: 30,
     async fetch(req) {
       const url = new URL(req.url)
       const store = new Store()
@@ -189,25 +191,43 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
           return json({ started: true })
         }
         if (path === "/api/run/stream") {
+          // A client that goes away mid-run (tab closed, idle timeout) must only detach its listener — never
+          // take the server down on the next progress line.
+          let listener: ((line: string | null) => void) | null = null
           const stream = new ReadableStream({
             start(controller) {
               const enc = new TextEncoder()
-              for (const l of run.lines) controller.enqueue(enc.encode(`data: ${l}\n\n`))
+              const push = (chunk: string) => {
+                try {
+                  controller.enqueue(enc.encode(chunk))
+                } catch {
+                  if (listener) run.listeners.delete(listener)
+                  listener = null
+                }
+              }
+              for (const l of run.lines) push(`data: ${l}\n\n`)
               if (run.done) {
-                controller.enqueue(enc.encode("event: done\ndata: done\n\n"))
+                push("event: done\ndata: done\n\n")
                 controller.close()
                 return
               }
-              const listener = (line: string | null) => {
+              listener = (line) => {
                 if (line === null) {
-                  controller.enqueue(enc.encode("event: done\ndata: done\n\n"))
-                  run.listeners.delete(listener)
-                  controller.close()
-                } else controller.enqueue(enc.encode(`data: ${line}\n\n`))
+                  push("event: done\ndata: done\n\n")
+                  if (listener) run.listeners.delete(listener)
+                  try {
+                    controller.close()
+                  } catch {}
+                } else push(`data: ${line}\n\n`)
               }
               run.listeners.add(listener)
             },
+            cancel() {
+              if (listener) run.listeners.delete(listener)
+              listener = null
+            },
           })
+          server.timeout(req, 0)
           return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } })
         }
         return new Response("not found", { status: 404 })
@@ -216,4 +236,5 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
       }
     },
   })
+  return server
 }

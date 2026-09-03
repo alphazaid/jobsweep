@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describeCadence, install, LABEL, notify, parseCadence, remove, renderPlist, renderSystemd, schtasksArgs, status, UNIT } from "../src/schedule.ts"
@@ -110,6 +110,21 @@ describe("install / status / remove with an injected home and recorder", () => {
     expect(status({ platform: "win32", run }).active).toBe(true)
     remove({ platform: "win32", run })
     expect(calls.at(-1)).toEqual(["schtasks", "/Delete", "/F", "/TN", UNIT])
+  })
+  test("digest --notify posts only when a run found new postings (fake osascript on PATH)", () => {
+    if (process.platform !== "darwin") return
+    const home = mkdtempSync(join(tmpdir(), "jobsweep-notify-"))
+    const bin = join(home, "bin")
+    mkdirSync(bin)
+    const hits = join(home, "hits")
+    writeFileSync(join(bin, "osascript"), `#!/bin/sh\necho "$@" >> ${hits}\n`, { mode: 0o755 })
+    writeFileSync(join(home, "profile.json"), JSON.stringify({ cities: ["Nowhere, ZZ"], sources: ["greenhouse"], days: 1 }))
+    writeFileSync(join(home, "companies.json"), "[]")
+    const run = () => Bun.spawnSync(["bun", "run", join(import.meta.dir, "..", "src", "cli.ts"), "digest", "--notify"], { env: { ...process.env, JOBSWEEP_HOME: home, PATH: `${bin}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe" })
+    // No boards, a city no source knows: the sweep is empty, so nothing is new and nothing may be posted.
+    expect(run().exitCode).toBe(0)
+    expect(existsSync(hits)).toBe(false)
+    rmSync(home, { recursive: true, force: true })
   })
   test("notify: macOS uses osascript with quoted text; unsupported platforms are silent", () => {
     const calls: string[][] = []

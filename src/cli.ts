@@ -43,7 +43,7 @@ USAGE
                                       Every posting from the last search with comp, years, fit, AI review, your decision, URL.
   jobsweep schedule --every <30m|6h|1d> | --daily HH:MM
                                       Run the digest on a timer via launchd (macOS), a systemd user timer (Linux), or
-                                      Task Scheduler (Windows); a desktop notification says how many postings are new.
+                                      Task Scheduler (Windows); a desktop notification only when a run finds new postings.
   jobsweep schedule --status | --remove
   jobsweep skill [--install] [--dir <path>]
                                       Print the agent skill (SKILL.md), or install it so your coding agent — Claude Code,
@@ -369,7 +369,8 @@ async function digest(argv: string[]): Promise<number> {
   await Bun.write(join(DIGEST_DIR(), "latest.json"), JSON.stringify({ ...d, all: jobs }, null, 2) + "\n")
   await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date, params: { cities: profile.cities, minTc: profile.minTc, maxYoe: profile.maxYoe, days: profile.days }, jobs, carriedIds: Object.keys(result.carriedIds), newIds: Object.keys(result.newIds) }))
   process.stdout.write((v.format === "json" ? JSON.stringify({ ...d, all: jobs }, null, 2) : md) + "\n")
-  if (v.notify) notify("jobsweep", fresh.length ? `${fresh.length} new posting${fresh.length === 1 ? "" : "s"} · ${jobs.length} open` : `nothing new · ${jobs.length} open`)
+  // Scheduled runs happen many times a day; only a run that found something is worth interrupting the user for.
+  if (v.notify && fresh.length) notify("jobsweep", `${fresh.length} new posting${fresh.length === 1 ? "" : "s"} · ${jobs.length} open`)
   return 0
 }
 

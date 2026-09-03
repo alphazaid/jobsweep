@@ -117,6 +117,35 @@ describe("serve", () => {
     const bad = await fetch(`${base}/api/decisions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: "x", status: "yolo" }) })
     expect(bad.status).toBe(400)
   })
+  test("a stream client that disconnects mid-run does not take the server down", async () => {
+    // A slow fake search: emits one line, waits, emits another. The first client drops after the first line.
+    const home2 = mkdtempSync(join(tmpdir(), "jobsweep-serve-slow-"))
+    const prevHome = process.env.JOBSWEEP_HOME
+    process.env.JOBSWEEP_HOME = home2
+    mkdirSync(join(home2, "digests"))
+    writeFileSync(join(home2, "digests", "last-search.json"), JSON.stringify({ date: "2026-09-02", params: { cities: ["A"], minTc: null, maxYoe: null, days: null }, jobs: [], carriedIds: [], newIds: [] }))
+    const slow = startServer({ port: 0, profile: null, searchCommand: ["sh", "-c", "echo '# one' >&2; sleep 0.6; echo '# two' >&2"], log: () => {} })
+    const b = `http://127.0.0.1:${slow.port}`
+    try {
+      expect((await fetch(`${b}/api/run`, { method: "POST" })).status).toBe(200)
+      const ac = new AbortController()
+      const first = await fetch(`${b}/api/run/stream`, { signal: ac.signal })
+      const reader = first.body!.getReader()
+      const { value } = await reader.read()
+      expect(new TextDecoder().decode(value)).toContain("data: one")
+      ac.abort() // client gone while the search is still running
+      await Bun.sleep(900) // "two" and the done event fire against the dead client
+      // Server still alive and the late lines are replayed to a fresh client.
+      const text = await (await fetch(`${b}/api/run/stream`)).text()
+      expect(text).toContain("data: two")
+      expect(text).toContain("event: done")
+      expect((await fetch(`${b}/api/stats.json`)).status).toBe(200)
+    } finally {
+      slow.stop(true)
+      process.env.JOBSWEEP_HOME = prevHome
+      rmSync(home2, { recursive: true, force: true })
+    }
+  })
   test("run endpoint streams the search's stderr and ends with a done event", async () => {
     const start = await fetch(`${base}/api/run`, { method: "POST" })
     expect(start.status).toBe(200)
