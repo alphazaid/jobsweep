@@ -85,7 +85,8 @@ Config lives in ${configDir()} (override with JOBSWEEP_HOME): profile.json, cand
 SEARCH FLAGS
   -l, --city <text>        City. Repeatable. Required unless the profile sets cities.
   -q, --query <text>       Keyword search. Repeatable. Default: the preset's queries.
-  --title-re <regex>       Title gate (default: SWE preset). Every result's title must match.
+  --title-re <regex>       Title gate (default: the profile's preset). Every result's title must match.
+  --preset <name>          Use another role preset's title gate and searches for this run (see \`jobsweep presets\`).
   --min-tc <usd>           Comp floor, e.g. 180000 or 180k, compared to the TOP of the posted band. Postings
                            without stated comp are kept in a separate section (see --strict-comp).
   --strict-comp            Drop postings that state no comp.
@@ -157,6 +158,7 @@ const SEARCH_OPTIONS = {
   city: { type: "string", short: "l", multiple: true },
   query: { type: "string", short: "q", multiple: true },
   "title-re": { type: "string" },
+  preset: { type: "string" },
   "min-tc": { type: "string" },
   "strict-comp": { type: "boolean", default: false },
   "max-yoe": { type: "string" },
@@ -202,7 +204,10 @@ async function search(argv: string[]): Promise<number> {
     minTc = parseMoney(v["min-tc"])
     if (minTc === null) fail(`--min-tc must look like 180000 or 180k, got "${v["min-tc"]}"`, "BAD_ARG")
   }
-  let titleRe: RegExp | undefined
+  // --preset swaps the title gate and default queries for this run; explicit --title-re / -q still win over it.
+  const preset = v.preset !== undefined ? PRESETS[v.preset] : undefined
+  if (v.preset !== undefined && !preset) fail(`--preset must be one of ${Object.keys(PRESETS).join(", ")}`, "BAD_ARG")
+  let titleRe: RegExp | undefined = preset ? new RegExp(preset.titlePattern, "i") : undefined
   if (v["title-re"] !== undefined) {
     try {
       titleRe = new RegExp(v["title-re"], "i")
@@ -215,7 +220,7 @@ async function search(argv: string[]): Promise<number> {
   if (v.linkedin && !sources && profile && !profile.sources.includes("linkedin")) sources = [...profile.sources, "linkedin"]
   const params = paramsFor(profile, {
     cities: v.city,
-    queries: v.query,
+    queries: v.query?.length ? v.query : preset?.queries,
     titleRe,
     remote: v.remote as SearchParams["remote"] | undefined,
     minTc,

@@ -47,6 +47,7 @@ const CSS = `
 *{box-sizing:border-box}html,body{margin:0;height:100%}
 body{font:14px/1.45 var(--sans);color:var(--ink);background:var(--bg);display:grid;grid-template-rows:auto 1fr;height:100vh}
 header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--rule)}
+header .back{font-size:13px;color:var(--ink);text-decoration:none;border:1px solid var(--rule);border-radius:4px;padding:4px 9px;white-space:nowrap}header .back:hover{border-color:var(--ink)}
 header h1{font-size:15px;font-weight:600;margin:0 8px 0 0;letter-spacing:-.01em}
 header .meta{color:var(--mute);font-size:12px}
 .f{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute)}
@@ -231,7 +232,7 @@ export function renderUi(jobs: Job[], o: UiOptions): string {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escHtml(o.title)}</title>${themeScript(o.theme ?? {})}<style>${themeCss()}${CSS}</style></head><body>
 <header>
-  <h1>${escHtml(o.title)}</h1><span class="meta">${escHtml(o.subtitle)}</span>
+  ${o.serverSync ? '<a class="back" href="/">← Dashboard</a>' : ""}<h1>${escHtml(o.title)}</h1><span class="meta">${escHtml(o.subtitle)}</span>
   <div class="f"><span class="seg" id="where"><button data-v="all" aria-pressed="true">All</button><button data-v="local">Local</button><button data-v="remote">Remote</button></span></div>
   <div class="f"><span class="seg" id="comp"><button data-v="all" aria-pressed="true">Any comp</button><button data-v="posted">Posted</button><button data-v="unknown">Unknown</button></span></div>
   <div class="f"><span class="seg" id="status"><button data-v="todo" aria-pressed="true">To review</button><button data-v="apply">Apply</button><button data-v="maybe">Maybe</button><button data-v="applied">Applied</button><button data-v="skip">Skipped</button><button data-v="all">All</button></span></div>

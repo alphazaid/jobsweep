@@ -1,15 +1,16 @@
 // `jobsweep serve`: a local-only HTTP server for the dashboard and triage page.
 // Binds 127.0.0.1 only. No auth because nothing off-machine can reach it; the
 // data is the user's own search results.
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { Store } from "./db.ts"
 import { renderDashboard } from "./dashboard.ts"
 import { toCsv, toRows } from "./export.ts"
 import { matchedLocation } from "./filters.ts"
-import { DIGEST_DIR } from "./paths.ts"
-import type { Profile } from "./profile.ts"
-import { DECISION_STATUSES, type DecisionStatus, type Job, type SearchParams } from "./types.ts"
+import { readEnv, readExistingProfile, writeSetup } from "./init.ts"
+import { DIGEST_DIR, PROFILE_PATH } from "./paths.ts"
+import { parseMoney, type Profile } from "./profile.ts"
+import { ALL_SOURCES, DECISION_STATUSES, PRESETS, type DecisionStatus, type Job, type SearchParams, type Source } from "./types.ts"
 import { renderUi } from "./ui.ts"
 
 export interface LastSearch {
@@ -30,6 +31,103 @@ interface RunState {
   lines: string[]
   done: boolean
   listeners: Set<(line: string | null) => void>
+}
+
+/** What the dashboard's search form may set for one run. Every field optional; absent = the profile's value. */
+export interface RunFields {
+  preset?: string
+  cities?: string[]
+  minTc?: string
+  maxYoe?: number
+  days?: number
+  remote?: "include" | "only" | "exclude"
+  sources?: Source[]
+  new?: boolean
+  /** Also write these fields to profile.json so later runs (and the cron) use them. */
+  save?: boolean
+}
+
+export function parseRunFields(v: unknown): RunFields | { error: string } {
+  if (!v || typeof v !== "object") return { error: "fields must be an object" }
+  const b = v as Record<string, unknown>
+  const out: RunFields = {}
+  if (b.preset != null) {
+    if (typeof b.preset !== "string" || !PRESETS[b.preset]) return { error: `preset must be one of ${Object.keys(PRESETS).join(", ")}` }
+    out.preset = b.preset
+  }
+  if (b.cities != null) {
+    const list = typeof b.cities === "string" ? b.cities.split(";") : Array.isArray(b.cities) ? b.cities : null
+    if (!list || !list.every((c) => typeof c === "string")) return { error: "cities must be a string (separate with ;) or an array" }
+    const cities = (list as string[]).map((c) => c.trim()).filter(Boolean)
+    if (!cities.length) return { error: "at least one city" }
+    if (cities.some((c) => c.length > 80 || /[\x00-\x1f]/.test(c))) return { error: "city looks wrong" }
+    out.cities = cities
+  }
+  if (b.minTc != null && String(b.minTc).trim() !== "") {
+    const s = String(b.minTc).trim()
+    if (parseMoney(s) === null) return { error: `comp floor "${s}" isn't a number (try 180k or 180000)` }
+    out.minTc = s
+  }
+  for (const k of ["maxYoe", "days"] as const) {
+    if (b[k] != null && String(b[k]).trim() !== "") {
+      const n = Number(b[k])
+      if (!Number.isInteger(n) || n < (k === "days" ? 1 : 0) || n > 3650) return { error: `${k} must be a whole number` }
+      out[k] = n
+    }
+  }
+  if (b.remote != null) {
+    if (!["include", "only", "exclude"].includes(String(b.remote))) return { error: "remote must be include, only, or exclude" }
+    out.remote = b.remote as RunFields["remote"]
+  }
+  if (b.sources != null) {
+    if (!Array.isArray(b.sources) || !b.sources.every((x) => typeof x === "string" && ALL_SOURCES.includes(x as Source))) return { error: `sources must be a subset of ${ALL_SOURCES.join(", ")}` }
+    if (!b.sources.length) return { error: "pick at least one source" }
+    out.sources = b.sources as Source[]
+  }
+  if (b.new != null) out.new = !!b.new
+  if (b.save != null) out.save = !!b.save
+  return out
+}
+
+/** The CLI flags for one run. Each value is its own argv element — no shell, no quoting. */
+export function runArgs(f: RunFields): string[] {
+  const a: string[] = []
+  for (const c of f.cities ?? []) a.push("-l", c)
+  if (f.minTc !== undefined) a.push("--min-tc", f.minTc)
+  if (f.maxYoe !== undefined) a.push("--max-yoe", String(f.maxYoe))
+  if (f.days !== undefined) a.push("--days", String(f.days))
+  if (f.remote !== undefined) a.push("--remote", f.remote)
+  if (f.sources !== undefined) a.push("--sources", f.sources.join(","))
+  if (f.preset !== undefined) a.push("--preset", f.preset)
+  if (f.new) a.push("--new")
+  return a
+}
+
+/** Write the form's fields into profile.json via the same core `init` uses; unset fields keep their current values. */
+function saveAsDefaults(f: RunFields, current: Profile | null): void {
+  const existing = readExistingProfile()
+  const env = readEnv()
+  const preset = f.preset ?? String(existing.preset ?? current?.preset.name ?? "swe")
+  writeSetup({
+    preset,
+    cities: f.cities ?? ((existing.cities as string[] | undefined) ?? []),
+    minTc: f.minTc ?? (existing.minTc == null ? "" : String(existing.minTc)),
+    maxYoe: f.maxYoe !== undefined ? String(f.maxYoe) : existing.maxYoe == null ? "" : String(existing.maxYoe),
+    days: f.days ?? Number(existing.days ?? 14),
+    remote: f.remote ?? String(existing.remote ?? "include"),
+    skills: existing.preset === preset ? ((existing.skills as string[] | undefined) ?? PRESETS[preset]!.skills) : PRESETS[preset]!.skills,
+    linkedin: f.sources ? f.sources.includes("linkedin") && existing.linkedinAccepted === true : existing.linkedinAccepted === true,
+    adzunaId: env.ADZUNA_APP_ID ?? "",
+    adzunaKey: env.ADZUNA_APP_KEY ?? "",
+    installSkill: false,
+  })
+  if (f.sources) {
+    // writeSetup derives sources from keys/consent; an explicit narrower pick is written on top of that.
+    const path = PROFILE_PATH()
+    const p = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>
+    p.sources = f.sources.filter((src) => src !== "linkedin" || existing.linkedinAccepted === true)
+    writeFileSync(path, JSON.stringify(p, null, 2) + "\n")
+  }
 }
 
 export interface ServeOptions {
@@ -82,11 +180,12 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
     for (const l of run.listeners) l(line)
   }
 
-  const startRun = (): boolean => {
+  const startRun = (extraArgs: string[] = []): boolean => {
     if (run.proc && !run.done) return false
     run.lines = []
     run.done = false
-    const proc = Bun.spawn(o.searchCommand, { stdout: "ignore", stderr: "pipe", env: process.env })
+    if (extraArgs.length) emit(`search ${extraArgs.join(" ")}`)
+    const proc = Bun.spawn([...o.searchCommand, ...extraArgs], { stdout: "ignore", stderr: "pipe", env: process.env })
     run.proc = proc
     // A wedged provider must not leave the button stuck on "running…" and /api/run answering 409 forever.
     const deadline = setTimeout(() => {
@@ -146,6 +245,9 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
               decisions: store.decisions(),
               runs: store.runs(),
               theme: o.profile?.theme ?? undefined,
+              profile: o.profile
+                ? { preset: o.profile.preset.name, cities: o.profile.cities, minTc: o.profile.minTc, maxYoe: o.profile.maxYoe, days: o.profile.days, remote: o.profile.remote, sources: o.profile.sources, linkedinAccepted: o.profile.linkedinAccepted }
+                : null,
             }),
           )
         }
@@ -189,8 +291,29 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
         }
         if (path === "/api/stats.json") return json(statsOf(last, store))
         if (path === "/api/run" && req.method === "POST") {
-          if (!startRun()) return new Response("a search is already running", { status: 409 })
-          return json({ started: true })
+          // Optional body: the form's fields. Validated here, turned into CLI flags; never shelled through a string.
+          let fields: RunFields = {}
+          const raw = (await req.text()).trim()
+          if (raw) {
+            let body: unknown
+            try {
+              body = JSON.parse(raw)
+            } catch {
+              return json({ error: "body must be JSON" }, 400)
+            }
+            const parsed = parseRunFields(body)
+            if ("error" in parsed) return json({ error: parsed.error }, 400)
+            fields = parsed
+          }
+          if (fields.save) {
+            try {
+              saveAsDefaults(fields, o.profile)
+            } catch (e) {
+              return json({ error: e instanceof Error ? e.message : String(e) }, 400)
+            }
+          }
+          if (!startRun(runArgs(fields))) return new Response("a search is already running", { status: 409 })
+          return json({ started: true, args: runArgs(fields), saved: !!fields.save })
         }
         if (path === "/api/run/stream") {
           // A client that goes away mid-run (tab closed, idle timeout) must only detach its listener — never

@@ -1,5 +1,5 @@
 import { themeCss, themeScript, themeSwitcher, type ThemePrefs } from "./theme.ts"
-import type { Decision, Job, RunSummary } from "./types.ts"
+import { ALL_SOURCES, PRESETS, type Decision, type Job, type RunSummary } from "./types.ts"
 
 export interface DashboardData {
   date: string
@@ -10,6 +10,8 @@ export interface DashboardData {
   decisions: Record<string, Decision>
   runs: RunSummary[]
   theme?: ThemePrefs
+  /** The standing profile, to prefill the search form. */
+  profile?: { preset: string; cities: string[]; minTc: number | null; maxYoe: number | null; days: number | null; remote: string; sources: string[]; linkedinAccepted: boolean } | null
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
@@ -88,6 +90,10 @@ h2{font-size:13px;font-weight:600;color:var(--mute);text-transform:uppercase;let
 .bars{width:100%;border-collapse:collapse;font-size:13px}.bars td{padding:3px 0;vertical-align:middle}.bars .l{width:40%;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}.bars .b div{height:10px;background:var(--ink);border-radius:2px;min-width:2px}.bars .n{width:80px;text-align:right;font-family:var(--mono);font-size:12px}.bars .pct{color:var(--mute);margin-left:6px}
 .mute{color:var(--mute)}
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.runform{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end}.runform label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mute)}
+.runform input,.runform select{font:inherit;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:5px 7px;min-width:0}.runform input[name=cities]{width:280px}
+.runform .hint{font-family:var(--mono);font-size:11px}.runform fieldset{border:1px solid var(--rule);border-radius:4px;padding:4px 8px 6px;margin:0;display:flex;gap:10px;flex-wrap:wrap}.runform legend{font-size:11px;color:var(--mute);padding:0 3px}
+.runform label.chk{flex-direction:row;align-items:center;gap:5px;color:var(--ink);font-size:13px}.runform label.chk input{accent-color:var(--accent)}.runform .actions{width:100%;margin-top:4px}
 button,.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:5px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none}
 button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}button[disabled]{opacity:.5;cursor:default}
 pre#log{background:var(--code);color:var(--codeInk);font-family:var(--mono);font-size:12px;padding:12px;border-radius:6px;max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:10px;display:none}
@@ -104,7 +110,20 @@ ${card(dec("apply") + dec("applied"), "marked apply", `${dec("applied")} applied
 ${card(undecided, "to review", `${dec("skip")} skipped`)}
 ${card(reviewed.length, "AI reviewed", reviewed.length ? `${reviewed.filter((j) => j.ai!.fit >= 4).length} scored 4+` : "run jobsweep rank")}
 </div>
-<div class="panel"><div class="actions"><button class="primary" id="run">Run search now</button><span class="mute" id="runstate">Sweeps every source with your profile; takes about a minute warm.</span></div><pre id="log"></pre></div>
+<div class="panel">
+<form id="runform" class="runform" autocomplete="off">
+  <label>Role<select name="preset">${Object.entries(PRESETS).map(([id, p]) => `<option value="${id}"${id === (d.profile?.preset ?? "swe") ? " selected" : ""}>${esc(id)} — ${esc(p.description)}</option>`).join("")}</select></label>
+  <label>Cities <span class="hint">separate with ;</span><input name="cities" value="${esc(d.profile?.cities.join("; ") ?? "")}" placeholder="New York, NY; Austin, TX" required></label>
+  <label>Comp floor<input name="minTc" value="${d.profile?.minTc != null ? `${Math.round(d.profile.minTc / 1000)}k` : ""}" placeholder="any" size="7"></label>
+  <label>Max years<input name="maxYoe" type="number" min="0" max="60" value="${d.profile?.maxYoe ?? ""}" placeholder="any" size="4"></label>
+  <label>Days<input name="days" type="number" min="1" max="3650" value="${d.profile?.days ?? ""}" placeholder="any" size="4"></label>
+  <label>Remote<select name="remote">${["include", "only", "exclude"].map((r) => `<option value="${r}"${r === (d.profile?.remote ?? "include") ? " selected" : ""}>${r}</option>`).join("")}</select></label>
+  <fieldset><legend>Sources</legend>${ALL_SOURCES.map((src) => `<label class="chk"><input type="checkbox" name="sources" value="${src}"${(d.profile?.sources ?? []).includes(src) ? " checked" : ""}${src === "linkedin" && !d.profile?.linkedinAccepted ? " disabled title=\"Enable in jobsweep init first\"" : ""}>${src}</label>`).join("")}</fieldset>
+  <label class="chk"><input type="checkbox" name="new">Only postings not seen before</label>
+  <label class="chk"><input type="checkbox" name="save">Save these as my defaults</label>
+  <div class="actions"><button class="primary" id="run" type="submit">Run search</button><span class="mute" id="runstate">Prefilled from your profile; change anything for this run, or tick “save” to keep it.</span></div>
+</form>
+<pre id="log"></pre></div>
 <h2>Open postings per run</h2><div class="panel">${historySvg(d.runs)}</div>
 <div class="grid">
 <div><h2>By source</h2><div class="panel">${bars(bySource, jobs.length)}</div></div>
@@ -117,8 +136,11 @@ ${card(reviewed.length, "AI reviewed", reviewed.length ? `${reviewed.filter((j) 
 </main>
 <script>
 const btn=document.getElementById("run"),log=document.getElementById("log"),state=document.getElementById("runstate");
-btn.onclick=async()=>{btn.disabled=true;log.style.display="block";log.textContent="";state.textContent="running…";
-  const r=await fetch("/api/run",{method:"POST"});if(!r.ok){state.textContent="could not start: "+await r.text();btn.disabled=false;return;}
+const form=document.getElementById("runform");
+form.onsubmit=async(e)=>{e.preventDefault();btn.disabled=true;log.style.display="block";log.textContent="";state.textContent="running…";
+  const fd=new FormData(form);const fields={preset:fd.get("preset"),cities:fd.get("cities"),minTc:fd.get("minTc"),maxYoe:fd.get("maxYoe"),days:fd.get("days"),remote:fd.get("remote"),sources:fd.getAll("sources"),new:fd.get("new")==="on",save:fd.get("save")==="on"};
+  const r=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)});
+  if(!r.ok){let m="";try{m=(await r.json()).error||""}catch(x){m=await r.text()}state.textContent="could not start: "+m;btn.disabled=false;return;}
   const es=new EventSource("/api/run/stream");
   es.onmessage=e=>{log.textContent+=e.data+"\\n";log.scrollTop=log.scrollHeight;};
   es.addEventListener("done",e=>{es.close();state.textContent="done — reloading";setTimeout(()=>location.reload(),600);});

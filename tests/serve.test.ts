@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Store } from "../src/db.ts"
 import { csvCell, toCsv, toRows } from "../src/export.ts"
 import { isHttpUrl } from "../src/text.ts"
-import { startServer } from "../src/serve.ts"
+import { parseRunFields, runArgs, startServer } from "../src/serve.ts"
 import type { Job } from "../src/types.ts"
 
 function job(id: string, over: Partial<Job> = {}): Job {
@@ -80,6 +80,23 @@ describe("store migration", () => {
   })
 })
 
+describe("dashboard search form", () => {
+  test("fields are validated and become argv elements, never a shell string", () => {
+    const ok = parseRunFields({ preset: "data", cities: "Austin, TX; Denver, CO", minTc: "180k", maxYoe: "4", days: "7", remote: "only", sources: ["greenhouse", "adzuna"], new: true, save: false })
+    expect(ok).toEqual({ preset: "data", cities: ["Austin, TX", "Denver, CO"], minTc: "180k", maxYoe: 4, days: 7, remote: "only", sources: ["greenhouse", "adzuna"], new: true, save: false })
+    expect(runArgs(ok as Exclude<typeof ok, { error: string }>)).toEqual(["-l", "Austin, TX", "-l", "Denver, CO", "--min-tc", "180k", "--max-yoe", "4", "--days", "7", "--remote", "only", "--sources", "greenhouse,adzuna", "--preset", "data", "--new"])
+    expect(runArgs(parseRunFields({}) as Record<string, never>)).toEqual([])
+    // Blank strings mean "profile value", not zero.
+    expect(parseRunFields({ minTc: "", maxYoe: "", days: "" })).toEqual({})
+    expect(parseRunFields({ preset: "astronaut" })).toMatchObject({ error: expect.stringContaining("preset must be") })
+    expect(parseRunFields({ minTc: "lots" })).toMatchObject({ error: expect.stringContaining("isn't a number") })
+    expect(parseRunFields({ sources: ["greenhouse", "craigslist"] })).toMatchObject({ error: expect.stringContaining("subset") })
+    expect(parseRunFields({ cities: "; ;" })).toMatchObject({ error: "at least one city" })
+    expect(parseRunFields({ cities: "Austin\u0000, TX" })).toMatchObject({ error: "city looks wrong" })
+    expect(parseRunFields({ remote: "sometimes" })).toMatchObject({ error: expect.stringContaining("remote must be") })
+  })
+})
+
 describe("serve", () => {
   let home: string
   let server: ReturnType<typeof startServer>
@@ -98,7 +115,9 @@ describe("serve", () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  test("dashboard renders counts", async () => {
+  test("dashboard renders counts; served triage has a header link back", async () => {
+    const triage = await (await fetch(`${base}/triage`)).text()
+    expect(triage).toContain('<a class="back" href="/">')
     const html = await (await fetch(`${base}/`)).text()
     expect(html).toContain("open matches")
     expect(html).toContain('<div class="n">2</div>')
@@ -142,6 +161,40 @@ describe("serve", () => {
       expect((await fetch(`${b}/api/stats.json`)).status).toBe(200)
     } finally {
       slow.stop(true)
+      process.env.JOBSWEEP_HOME = prevHome
+      rmSync(home2, { recursive: true, force: true })
+    }
+  })
+  test("POST /api/run with fields passes them as flags; save writes the profile; bad fields 400", async () => {
+    const home2 = mkdtempSync(join(tmpdir(), "jobsweep-serve-form-"))
+    const prevHome = process.env.JOBSWEEP_HOME
+    process.env.JOBSWEEP_HOME = home2
+    mkdirSync(join(home2, "digests"))
+    writeFileSync(join(home2, "profile.json"), JSON.stringify({ cities: ["New York, NY"], minTc: "200k", maxYoe: 3, sources: ["greenhouse"] }))
+    writeFileSync(join(home2, "companies.json"), "[]")
+    writeFileSync(join(home2, "digests", "last-search.json"), JSON.stringify({ date: "2026-09-02", params: { cities: ["New York, NY"], minTc: 200000, maxYoe: 3, days: 14 }, jobs: [], carriedIds: [], newIds: [] }))
+    const argsFile = join(home2, "args.txt")
+    // The "search" is a script that records its argv, so the flags the server built are observable.
+    const srv = startServer({ port: 0, profile: null, searchCommand: ["sh", "-c", `echo "$@" > ${argsFile}; echo '# ran' >&2`, "search"], log: () => {} })
+    const b = `http://127.0.0.1:${srv.port}`
+    try {
+      const bad = await fetch(`${b}/api/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ minTc: "lots" }) })
+      expect(bad.status).toBe(400)
+      expect(((await bad.json()) as { error: string }).error).toContain("isn't a number")
+      const r = await fetch(`${b}/api/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cities: "Austin, TX", minTc: "180k", days: "7", preset: "data", save: true }) })
+      expect(r.status).toBe(200)
+      expect(await r.json()).toMatchObject({ started: true, saved: true, args: ["-l", "Austin, TX", "--min-tc", "180k", "--days", "7", "--preset", "data"] })
+      await (await fetch(`${b}/api/run/stream`)).text()
+      expect(readFileSync(argsFile, "utf8").trim()).toBe("-l Austin, TX --min-tc 180k --days 7 --preset data")
+      const saved = JSON.parse(readFileSync(join(home2, "profile.json"), "utf8")) as Record<string, unknown>
+      expect(saved).toMatchObject({ preset: "data", cities: ["Austin, TX"], minTc: 180000, days: 7, maxYoe: 3 })
+      expect(saved.skills).toContain("Spark")
+      // The dashboard prefills from the (server-loaded) profile: absent here, so the form still renders with defaults.
+      const html = await (await fetch(`${b}/`)).text()
+      expect(html).toContain('id="runform"')
+      expect(html).toContain('name="preset"')
+    } finally {
+      srv.stop(true)
       process.env.JOBSWEEP_HOME = prevHome
       rmSync(home2, { recursive: true, force: true })
     }

@@ -90,7 +90,8 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 ```
 -l, --city <text>        City. Repeatable. Required unless the profile sets cities.
 -q, --query <text>       Keyword search. Repeatable. Default: the preset's queries.
---title-re <regex>       Title gate (default: SWE preset). Every result's title must match.
+--title-re <regex>       Title gate (default: the profile's preset). Every result's title must match.
+--preset <name>          Another role preset's gate and searches for this run (see `jobsweep presets`).
 --min-tc <usd>           Comp floor, e.g. 180000 or 180k, compared to the TOP of the posted band.
                          Postings without stated comp are kept in a separate section.
 --strict-comp            Drop postings that state no comp.
@@ -127,13 +128,13 @@ A small local server, in the spirit of `omp stats`: the page is rebuilt on every
 **`/` — Dashboard**
 
 - Stat cards: open matches (new · carried), with posted comp (%), median comp ceiling (and the top), marked apply (applied · maybe), to review (skipped), AI reviewed.
-- **Run search now** — launches `jobsweep search` and streams its real progress (source by source, counts, timings) into the page, then reloads. One run at a time; a run that exceeds 15 minutes is killed so the button can't stay stuck.
+- **Search form** — prefilled from your profile (role preset, cities, comp floor, max years, days, remote, sources). Change anything for a one-off run — "Austin, 180k, boards only, last 7 days" — or tick *Save these as my defaults* to write them to `profile.json`. Runs `jobsweep search` with those flags and streams its real progress (source by source, counts, timings) into the page, then reloads. One run at a time; a run over 15 minutes is killed so the button can't stay stuck.
 - Open postings per run — a history line chart (total, and with-comp dashed). Appears from the second run onward; every `search` records a row.
 - Breakdowns: by source, comp ceiling band, title band, companies with the most postings, your decision funnel, AI fit distribution.
 
 **`/triage` — Triage**
 
-The keyboard-driven list, with marks saved server-side in SQLite (shared across browsers, included in exports):
+The keyboard-driven list, with marks saved server-side in SQLite (shared across browsers, included in exports). "← Dashboard" top-left goes back.
 
 `j`/`k` move · `a` apply · `m` maybe · `x` skip · `d` applied · `o` open posting · `/` search · `Enter` open.
 Top bar: All / Local / Remote · comp Posted / Unknown · status tabs · Fit ≥ · sort (comp, fit, posted, company, AI fit once ranked). The detail pane shows the comp band against your floor, years, skills matched (highlighted in the description too), the AI review when present, and a notes box.
@@ -147,7 +148,7 @@ Top bar: All / Local / Remote · comp Posted / Unknown · status tabs · Fit ≥
 | `GET /api/decisions.json` | your marks + notes, keyed by posting id |
 | `POST /api/decisions` `{id, status, note}` | set a mark (`apply`, `maybe`, `skip`, `applied`, or `""` to clear) |
 | `GET /api/stats.json` | the dashboard's numbers + run history |
-| `POST /api/run` · `GET /api/run/stream` | start a search · SSE stream of its progress |
+| `POST /api/run` `{preset?, cities?, minTc?, maxYoe?, days?, remote?, sources?, new?, save?}` · `GET /api/run/stream` | start a search with optional overrides (validated; `save` also writes the profile) · SSE stream of its progress |
 
 Console modes, no server:
 
@@ -348,7 +349,7 @@ Prefer your own cron? `jobsweep digest` is the command to point it at. Add `--ra
 
 ```sh
 bun install
-bun test            # 189 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 191 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui
