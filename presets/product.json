@@ -1,0 +1,38 @@
+{
+  "name": "product",
+  "description": "Product management",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|marketing|engineer|designer|analyst|owner)\\b)(?=.*\\b(product)\\b)(?=.*\\b(manager|lead|director|head|pm)\\b).*",
+  "queries": [
+    "product manager",
+    "senior product manager",
+    "technical product manager",
+    "group product manager"
+  ],
+  "skills": [
+    "Roadmap",
+    "SQL",
+    "A/B Testing",
+    "Analytics",
+    "Figma",
+    "Jira",
+    "Agile",
+    "User Research",
+    "Go-to-Market",
+    "Pricing",
+    "APIs",
+    "Growth",
+    "Amplitude",
+    "Mixpanel",
+    "Stakeholder Management",
+    "PRD",
+    "OKRs",
+    "Experimentation"
+  ],
+  "exclude": [
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "product"
+  ]
+}

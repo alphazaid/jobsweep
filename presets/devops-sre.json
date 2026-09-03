@@ -1,0 +1,43 @@
+{
+  "name": "devops-sre",
+  "description": "DevOps, SRE, platform and infrastructure engineering",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|manager|director)\\b)(?=.*\\b(devops|sre|site reliability|platform|infrastructure|infra|cloud|systems|production|release|build)\\b)(?=.*\\b(engineer|sre|administrator|architect|specialist)\\b).*",
+  "queries": [
+    "devops engineer",
+    "site reliability engineer",
+    "platform engineer",
+    "infrastructure engineer",
+    "cloud engineer"
+  ],
+  "skills": [
+    "Kubernetes",
+    "Terraform",
+    "AWS",
+    "GCP",
+    "Azure",
+    "Docker",
+    "Linux",
+    "Go",
+    "Python",
+    "Bash",
+    "Prometheus",
+    "Grafana",
+    "Ansible",
+    "CI/CD",
+    "Helm",
+    "Datadog",
+    "Networking",
+    "PostgreSQL"
+  ],
+  "exclude": [
+    "clearance",
+    "manager",
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "devops",
+    "sre",
+    "network_engineering"
+  ]
+}

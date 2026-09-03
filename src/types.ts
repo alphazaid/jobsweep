@@ -1,3 +1,15 @@
+import anyPreset from "../presets/any.json"
+import dataPreset from "../presets/data.json"
+import designPreset from "../presets/design.json"
+import devopsPreset from "../presets/devops-sre.json"
+import financePreset from "../presets/finance.json"
+import healthcarePreset from "../presets/healthcare.json"
+import hrPreset from "../presets/hr-recruiting.json"
+import legalPreset from "../presets/legal.json"
+import marketingPreset from "../presets/marketing.json"
+import productPreset from "../presets/product.json"
+import salesPreset from "../presets/sales.json"
+import securityPreset from "../presets/security.json"
 import swePreset from "../presets/swe.json"
 
 export type Source = "linkedin" | "greenhouse" | "lever" | "ashby" | "adzuna" | "freehire"
@@ -79,7 +91,11 @@ export interface SearchParams {
   linkedinAccepted: boolean
 }
 
-/** A role preset: the title gate, default queries, skills to score, and title words to exclude. Bundled from presets/*.json. */
+/**
+ * A role preset: the title gate, default queries, skills to score, title words to exclude, and which freehire
+ * categories `companies discover` scans for boards. Bundled from presets/*.json; `profile.preset` picks one and any
+ * profile field overrides it.
+ */
 export interface Preset {
   name: string
   description: string
@@ -87,9 +103,25 @@ export interface Preset {
   queries: string[]
   skills: string[]
   exclude: string[]
+  discoverCategories: string[]
 }
 
-export const PRESETS: Record<string, Preset> = { swe: swePreset }
+/** Ordered as `init` lists them: the tech presets first (where the seed boards are richest), then other fields. */
+export const PRESETS: Record<string, Preset> = {
+  swe: swePreset,
+  data: dataPreset,
+  "devops-sre": devopsPreset,
+  security: securityPreset,
+  product: productPreset,
+  design: designPreset,
+  marketing: marketingPreset,
+  sales: salesPreset,
+  finance: financePreset,
+  healthcare: healthcarePreset,
+  legal: legalPreset,
+  "hr-recruiting": hrPreset,
+  any: anyPreset,
+}
 export const DEFAULT_PRESET = PRESETS.swe!
 
 /** Default title gate (SWE preset): requires a software role noun, rejects adjacent disciplines that share "engineer". */

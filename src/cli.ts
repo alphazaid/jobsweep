@@ -24,14 +24,16 @@ import { describeCadence, install as installSchedule, notify, parseCadence, remo
 import { readLastSearch, startServer, statsOf, summaryText } from "./serve.ts"
 import { toCsv, toRows } from "./export.ts"
 import { run } from "./run.ts"
-import { AGENCY_RE, ALL_SOURCES, DEFAULT_PRESET, DEFAULT_QUERIES, LEVELS, SWE_TITLE_RE, type Company, type Job, type Level, type SearchParams, type Source } from "./types.ts"
+import { AGENCY_RE, ALL_SOURCES, DEFAULT_PRESET, DEFAULT_QUERIES, PRESETS, LEVELS, SWE_TITLE_RE, type Company, type Job, type Level, type SearchParams, type Source } from "./types.ts"
 import { renderUi } from "./ui.ts"
 
 const HELP = `jobsweep ${pkg.version} — sweep company boards, Adzuna, freehire (and optionally LinkedIn) for software jobs by city, comp, and experience
 
 USAGE
   jobsweep init                       Set up your profile interactively (cities, comp floor, years, skills, sources).
-  jobsweep init --cities "New York, NY;Austin, TX" [--min-tc 200k] [--max-yoe 3] [--days 14]
+  jobsweep presets                    List role presets (swe, data, devops-sre, security, product, design, marketing,
+                                      sales, finance, healthcare, legal, hr-recruiting, any) with what each searches.
+  jobsweep init --preset swe --cities "New York, NY;Austin, TX" [--min-tc 200k] [--max-yoe 3] [--days 14]
                [--remote include|only|exclude] [--skills "Go,TypeScript"] [--linkedin] [--skill|--no-skill] [--json] [--dry-run]
                                       The same setup without prompts — for scripts and agents (see SETUP.md). Omitted
                                       flags keep existing values or defaults. Adzuna keys are read from the environment
@@ -440,7 +442,7 @@ async function companies(argv: string[]): Promise<number> {
     const profile = await loadProfile(v.profile ?? PROFILE_PATH())
     const cities = profile?.cities ?? []
     if (!cities.length) fail("discover needs cities: run `jobsweep init`", "NO_CITY")
-    const found = await discoverBoards(cities, { pages: int("pages", v.pages), days: int("days", v.days), log: ctx.log })
+    const found = await discoverBoards(cities, { pages: int("pages", v.pages), days: int("days", v.days), categories: profile!.preset.discoverCategories, queries: profile!.queries, log: ctx.log })
     const known: Record<string, true> = {}
     for (const c of list) known[`${c.ats}:${c.slug}`] = true
     const minPostings = int("min-postings", v["min-postings"])
@@ -608,7 +610,7 @@ function initFlags(argv: string[]): number {
     args: argv,
     strict: true,
     options: {
-      cities: { type: "string" }, "min-tc": { type: "string" }, "max-yoe": { type: "string" }, days: { type: "string" }, remote: { type: "string" }, skills: { type: "string" },
+      preset: { type: "string" }, cities: { type: "string" }, "min-tc": { type: "string" }, "max-yoe": { type: "string" }, days: { type: "string" }, remote: { type: "string" }, skills: { type: "string" },
       linkedin: { type: "boolean" }, "no-linkedin": { type: "boolean", default: false },
       skill: { type: "boolean" }, "no-skill": { type: "boolean", default: false }, json: { type: "boolean", default: false }, "dry-run": { type: "boolean", default: false },
     },
@@ -619,13 +621,15 @@ function initFlags(argv: string[]): number {
   const cities = v.cities !== undefined ? split(v.cities, ";") : ((existing.cities as string[] | undefined) ?? [])
   if (!cities.length) fail("--cities is required the first time (e.g. --cities \"New York, NY\"; separate several with ;)", "NO_CITY")
   try {
+    const preset = v.preset ?? String(existing.preset ?? DEFAULT_PRESET.name)
     const r = writeSetup({
+      preset,
       cities,
       minTc: v["min-tc"] ?? (existing.minTc == null ? "" : String(existing.minTc)),
       maxYoe: v["max-yoe"] ?? (existing.maxYoe == null ? "" : String(existing.maxYoe)),
       days: v.days !== undefined ? int("days", v.days) : Number(existing.days ?? 14),
       remote: v.remote ?? String(existing.remote ?? "include"),
-      skills: v.skills !== undefined ? split(v.skills, ",") : ((existing.skills as string[] | undefined) ?? DEFAULT_PRESET.skills),
+      skills: v.skills !== undefined ? split(v.skills, ",") : existing.preset === preset ? ((existing.skills as string[] | undefined) ?? PRESETS[preset]?.skills ?? []) : (PRESETS[preset]?.skills ?? []),
       linkedin: v["no-linkedin"] ? false : (v.linkedin ?? existing.linkedinAccepted === true),
       // Secrets never ride on argv (shell history, `ps`): unattended setup takes them from the environment,
       // falling back to what an earlier setup already saved.
@@ -646,6 +650,15 @@ async function doctorCmd(argv: string[]): Promise<number> {
   const checks = await doctor()
   process.stdout.write(v.json ? JSON.stringify(checks, null, 2) + "\n" : renderChecks(checks))
   return checks.every((c) => c.ok || !c.required) ? 0 : 1
+}
+
+function presets(): number {
+  const w = Math.max(...Object.keys(PRESETS).map((k) => k.length))
+  for (const [k, p] of Object.entries(PRESETS)) {
+    process.stdout.write(`${k.padEnd(w)}  ${p.description}\n${" ".repeat(w + 2)}searches: ${p.queries.join(" · ") || "(your queries)"}\n`)
+  }
+  process.stdout.write(`\nPick one with \`jobsweep init --preset <name>\` (or answer the first init question). profile.json's titlePattern, queries, skills, exclude override the preset.\n`)
+  return 0
 }
 
 function schedule(argv: string[]): number {
@@ -694,6 +707,7 @@ const [cmd, ...rest] = process.argv.slice(2)
 const job =
   cmd === "init" ? (rest.length ? Promise.resolve(initFlags(rest)) : init())
   : cmd === "doctor" ? doctorCmd(rest)
+  : cmd === "presets" ? Promise.resolve(presets())
   : cmd === "setup-guide" ? (process.stdout.write(setupGuide), Promise.resolve(0))
   : cmd === "search" ? search(rest)
   : cmd === "ui" ? ui(rest)

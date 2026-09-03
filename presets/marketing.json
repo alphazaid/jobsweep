@@ -1,0 +1,39 @@
+{
+  "name": "marketing",
+  "description": "Marketing: growth, product marketing, content, demand gen",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|engineer|developer)\\b)(?=.*\\b(marketing|growth|demand generation|demand gen|content|brand|seo|sem|lifecycle|product marketing|communications|pr)\\b)(?=.*\\b(manager|specialist|lead|strategist|marketer|director|coordinator|associate|writer)\\b).*",
+  "queries": [
+    "marketing manager",
+    "product marketing manager",
+    "growth marketing manager",
+    "content marketing manager",
+    "demand generation manager"
+  ],
+  "skills": [
+    "SEO",
+    "SEM",
+    "Google Ads",
+    "HubSpot",
+    "Salesforce",
+    "Marketo",
+    "Analytics",
+    "Copywriting",
+    "A/B Testing",
+    "Email Marketing",
+    "Social Media",
+    "Content Strategy",
+    "Brand",
+    "Webflow",
+    "Figma",
+    "SQL",
+    "Attribution",
+    "Paid Social"
+  ],
+  "exclude": [
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "marketing"
+  ]
+}

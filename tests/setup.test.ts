@@ -72,11 +72,49 @@ describe("init --flags (unattended)", () => {
   })
 })
 
+describe("presets", () => {
+  test("--preset selects the field; switching presets resets skills/exclude, same preset keeps them; unknown rejected", () => {
+    expect(cli(["init", "--preset", "finance", "--cities", "Chicago, IL", "--no-skill"]).code).toBe(0)
+    expect(profile()).toMatchObject({ preset: "finance", exclude: ["intern", "contract"] })
+    expect(profile().skills).toContain("GAAP")
+    cli(["init", "--skills", "Excel,SQL", "--no-skill"])
+    expect(profile()).toMatchObject({ preset: "finance", skills: ["Excel", "SQL"] })
+    cli(["init", "--preset", "legal", "--no-skill"])
+    expect(profile().skills).toContain("Westlaw")
+    expect(cli(["init", "--preset", "astronaut", "--no-skill"]).err).toContain("preset must be one of")
+    const list = cli(["presets"]).out
+    expect(list).toContain("healthcare")
+    expect(list).toContain("registered nurse")
+  })
+  test("each preset's title gate admits its own roles and rejects the SWE noise", async () => {
+    const { PRESETS } = await import("../src/types.ts")
+    const re = (n: string) => new RegExp(PRESETS[n]!.titlePattern, "i")
+    expect(re("healthcare").test("Registered Nurse - ICU")).toBe(true)
+    expect(re("healthcare").test("Software Engineer, Healthcare")).toBe(false)
+    expect(re("finance").test("Senior Financial Analyst")).toBe(true)
+    expect(re("finance").test("Financial Software Engineer")).toBe(false)
+    expect(re("data").test("Data Engineer")).toBe(true)
+    expect(re("data").test("Data Center Technician")).toBe(false)
+    expect(re("product").test("Senior Product Manager")).toBe(true)
+    expect(re("product").test("Product Designer")).toBe(false)
+    expect(re("sales").test("Account Executive, Mid-Market")).toBe(true)
+    expect(re("legal").test("Corporate Counsel")).toBe(true)
+    expect(re("any").test("Underwater Basket Weaver")).toBe(true)
+    for (const [k, p] of Object.entries(PRESETS)) expect(Array.isArray(p.discoverCategories), k).toBe(true)
+  })
+})
+
 describe("init (interactive)", () => {
   test("answers on stdin produce the same profile as flags", () => {
-    const r = cli(["init"], {}, "Boston, MA\n150k\n2\n7\nonly\nRust, Go\nn\n\nn\n")
+    const r = cli(["init"], {}, "\nBoston, MA\n150k\n2\n7\nonly\nRust, Go\nn\n\nn\n")
     expect(r.code).toBe(0)
-    expect(profile()).toMatchObject({ cities: ["Boston, MA"], minTc: 150000, maxYoe: 2, days: 7, remote: "only", skills: ["Rust", "Go"], linkedinAccepted: false })
+    expect(profile()).toMatchObject({ preset: "swe", cities: ["Boston, MA"], minTc: 150000, maxYoe: 2, days: 7, remote: "only", skills: ["Rust", "Go"], linkedinAccepted: false })
+    // Choosing a preset in the first answer takes its skills and exclude list.
+    const r2 = cli(["init"], {}, "healthcare\nBoston, MA\n\n\n\n\n\nn\n\nn\n")
+    expect(r2.code).toBe(0)
+    expect(profile()).toMatchObject({ preset: "healthcare", exclude: ["intern", "travel"] })
+    expect((profile().skills as string[])).toContain("Epic")
+    expect(cli(["init"], {}, "underwater-basket\n").code).toBe(1)
   })
 })
 

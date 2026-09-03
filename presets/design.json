@@ -1,0 +1,40 @@
+{
+  "name": "design",
+  "description": "Product, UX, and UI design",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|engineer|graphic|interior|fashion|instructional|manager)\\b)(?=.*\\b(product|ux|ui|user experience|interaction|visual|design systems?)\\b)(?=.*\\b(designer|design|researcher|lead)\\b).*",
+  "queries": [
+    "product designer",
+    "ux designer",
+    "ui designer",
+    "ux researcher",
+    "design systems designer"
+  ],
+  "skills": [
+    "Figma",
+    "Sketch",
+    "Prototyping",
+    "User Research",
+    "Design Systems",
+    "Accessibility",
+    "Usability Testing",
+    "Wireframing",
+    "Interaction Design",
+    "Visual Design",
+    "HTML",
+    "CSS",
+    "Framer",
+    "Adobe XD",
+    "Motion Design",
+    "Information Architecture",
+    "Journey Mapping",
+    "A/B Testing"
+  ],
+  "exclude": [
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "design",
+    "creative"
+  ]
+}

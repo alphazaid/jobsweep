@@ -1,0 +1,39 @@
+{
+  "name": "finance",
+  "description": "Finance and accounting: FP&A, analyst, accountant, controller",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|engineer|developer|advisor|teller|loan officer)\\b)(?=.*\\b(finance|financial|fp&a|accounting|accountant|controller|treasury|audit|tax|investment|equity|credit|risk)\\b)(?=.*\\b(analyst|manager|associate|accountant|controller|specialist|lead|director|auditor|senior|staff)\\b).*",
+  "queries": [
+    "financial analyst",
+    "fp&a analyst",
+    "senior accountant",
+    "finance manager",
+    "investment analyst"
+  ],
+  "skills": [
+    "Excel",
+    "Financial Modeling",
+    "GAAP",
+    "SQL",
+    "NetSuite",
+    "SAP",
+    "Oracle",
+    "QuickBooks",
+    "Forecasting",
+    "Budgeting",
+    "Variance Analysis",
+    "CPA",
+    "CFA",
+    "Python",
+    "Power BI",
+    "Tableau",
+    "Anaplan",
+    "Audit"
+  ],
+  "exclude": [
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "finance"
+  ]
+}

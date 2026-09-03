@@ -1,0 +1,45 @@
+{
+  "name": "data",
+  "description": "Data analyst, data scientist, data engineer, analytics engineer",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|marketing manager|account|customer success|intern)\\b)(?=.*\\b(data|analytics|analyst|scientist|business intelligence|bi)\\b)(?=.*\\b(engineer|scientist|analyst|analytics|developer)\\b).*",
+  "queries": [
+    "data engineer",
+    "data scientist",
+    "data analyst",
+    "analytics engineer",
+    "machine learning engineer"
+  ],
+  "skills": [
+    "SQL",
+    "Python",
+    "Spark",
+    "dbt",
+    "Airflow",
+    "Snowflake",
+    "BigQuery",
+    "Databricks",
+    "Pandas",
+    "Tableau",
+    "Looker",
+    "Kafka",
+    "AWS",
+    "GCP",
+    "TensorFlow",
+    "PyTorch",
+    "R",
+    "Statistics"
+  ],
+  "exclude": [
+    "clearance",
+    "manager",
+    "intern",
+    "contract",
+    "director"
+  ],
+  "discoverCategories": [
+    "data_engineering",
+    "data_science",
+    "data_analytics",
+    "ml_ai"
+  ]
+}

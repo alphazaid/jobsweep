@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { COMPANIES_PATH, ENV_PATH, PROFILE_PATH, configDir } from "./paths.ts"
 import { LINKEDIN_NOTICE, parseMoney } from "./profile.ts"
 import { defaultSkillDirs, installSkill } from "./skill.ts"
-import { DEFAULT_PRESET } from "./types.ts"
+import { DEFAULT_PRESET, PRESETS } from "./types.ts"
 
 const out = (s = "") => process.stdout.write(s + "\n")
 
@@ -22,6 +22,7 @@ function yes(q: string, def = true): boolean {
 
 /** Everything setup needs, however it was collected. Strings are as a user would type them. */
 export interface SetupAnswers {
+  preset: string
   cities: string[]
   minTc: string
   maxYoe: string
@@ -70,6 +71,8 @@ export function readEnv(): Record<string, string> {
  */
 export function writeSetup(a: SetupAnswers, dryRun = false): SetupResult {
   const notes: string[] = []
+  const preset = PRESETS[a.preset]
+  if (!preset) throw new Error(`preset must be one of ${Object.keys(PRESETS).join(", ")}, got "${a.preset}"`)
   if (!a.cities.length) throw new Error("at least one city is required (e.g. \"New York, NY\")")
   for (const c of a.cities) if (!knownMetro(c)) notes.push(`no suburb aliases for "${c}" yet — only exact city text matches; add some to ${configDir()}/metros.json (see README)`)
   const minTc = a.minTc ? parseMoney(a.minTc) : null
@@ -84,14 +87,15 @@ export function writeSetup(a: SetupAnswers, dryRun = false): SetupResult {
   const existing = readExistingProfile()
   const profile = {
     cities: a.cities,
-    preset: DEFAULT_PRESET.name,
+    preset: preset.name,
     minTc,
     maxYoe,
     days: a.days,
     remote: a.remote,
     sources: ["greenhouse", "lever", "ashby", ...(adzuna ? ["adzuna"] : []), "freehire", ...(a.linkedin ? ["linkedin"] : [])],
     skills: a.skills,
-    exclude: (existing.exclude as string[] | undefined) ?? DEFAULT_PRESET.exclude,
+    // A preset switch resets the exclude list to the new field's; same preset keeps the user's edits.
+    exclude: existing.preset === preset.name ? ((existing.exclude as string[] | undefined) ?? preset.exclude) : preset.exclude,
     linkedinAccepted: a.linkedin,
   }
   const profilePath = PROFILE_PATH()
@@ -120,7 +124,14 @@ export async function init(): Promise<number> {
   out(`jobsweep setup — writes ${configDir()}`)
   out("Press Enter to keep the value in brackets. Nothing here leaves your machine.\n")
 
-  const cities = ask("Cities (separate with ;  e.g. New York, NY; Austin, TX)", (existing.cities as string[] | undefined)?.join("; ") ?? "New York, NY")
+  out("What kind of role? (the title gate, default searches, and skills come from this; every one can be overridden in profile.json)")
+  for (const [k, pr] of Object.entries(PRESETS)) out(`  ${k.padEnd(14)} ${pr.description}`)
+  const preset = ask("Preset", String(existing.preset ?? DEFAULT_PRESET.name))
+  if (!PRESETS[preset]) {
+    out(`  unknown preset "${preset}"`)
+    return 1
+  }
+  const cities = ask("\nCities (separate with ;  e.g. New York, NY; Austin, TX)", (existing.cities as string[] | undefined)?.join("; ") ?? "New York, NY")
     .split(";")
     .map((s) => s.trim())
     .filter(Boolean)
@@ -128,7 +139,7 @@ export async function init(): Promise<number> {
   const maxYoe = ask("Max years of experience a posting may require (blank = any)", existing.maxYoe == null ? "" : String(existing.maxYoe))
   const days = Number(ask("Only postings from the last N days", String(existing.days ?? 14)))
   const remote = ask("Remote roles: include (city + remote), only, or exclude", String(existing.remote ?? "include"))
-  const skills = ask("Skills to score postings against, comma-separated", ((existing.skills as string[] | undefined) ?? DEFAULT_PRESET.skills).join(", "))
+  const skills = ask("Skills to score postings against, comma-separated", (existing.preset === preset ? ((existing.skills as string[] | undefined) ?? PRESETS[preset]!.skills) : PRESETS[preset]!.skills).join(", "))
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
@@ -146,7 +157,7 @@ export async function init(): Promise<number> {
 
   let r: SetupResult
   try {
-    r = writeSetup({ cities, minTc, maxYoe, days, remote, skills, linkedin, adzunaId, adzunaKey, installSkill: install })
+    r = writeSetup({ preset, cities, minTc, maxYoe, days, remote, skills, linkedin, adzunaId, adzunaKey, installSkill: install })
   } catch (e) {
     out(`  ${e instanceof Error ? e.message : String(e)}`)
     return 1

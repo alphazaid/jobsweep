@@ -1,0 +1,40 @@
+{
+  "name": "hr-recruiting",
+  "description": "People ops, HR business partner, recruiting, talent",
+  "titlePattern": "^(?!.*\\b(sales|intern|engineer|developer)\\b)(?=.*\\b(recruit\\w*|talent|people|hr|human resources|hrbp|compensation|benefits|onboarding|sourcer|sourcing)\\b)(?=.*\\b(recruiter|partner|manager|specialist|coordinator|lead|generalist|analyst|sourcer|director|associate)\\b).*",
+  "queries": [
+    "recruiter",
+    "technical recruiter",
+    "hr business partner",
+    "people operations manager",
+    "talent acquisition specialist"
+  ],
+  "skills": [
+    "Greenhouse",
+    "Lever",
+    "Workday",
+    "ATS",
+    "Sourcing",
+    "LinkedIn Recruiter",
+    "Employer Branding",
+    "Onboarding",
+    "Compensation",
+    "Benefits",
+    "Employee Relations",
+    "HRIS",
+    "Performance Management",
+    "DEI",
+    "Payroll",
+    "Rippling",
+    "Gusto",
+    "Interviewing"
+  ],
+  "exclude": [
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "recruiting",
+    "hr"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "any",
+  "description": "No title gate — every title passes; set titlePattern/queries/skills in your profile",
+  "titlePattern": ".*",
+  "queries": [],
+  "skills": [],
+  "exclude": [
+    "intern"
+  ],
+  "discoverCategories": []
+}

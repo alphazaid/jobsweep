@@ -1,0 +1,41 @@
+{
+  "name": "sales",
+  "description": "Sales: AE, SDR/BDR, account management, solutions",
+  "titlePattern": "^(?!.*\\b(recruit\\w*|intern|engineer|retail|cashier)\\b)(?=.*\\b(sales|account executive|account manager|business development|sdr|bdr|ae|solutions?|partnerships?|revenue)\\b)(?=.*\\b(executive|representative|manager|associate|director|lead|consultant|engineer|specialist|development|rep)\\b).*",
+  "queries": [
+    "account executive",
+    "sales development representative",
+    "account manager",
+    "business development representative",
+    "solutions engineer"
+  ],
+  "skills": [
+    "Salesforce",
+    "HubSpot",
+    "Outreach",
+    "Gong",
+    "Prospecting",
+    "Negotiation",
+    "Pipeline Management",
+    "SaaS",
+    "Enterprise Sales",
+    "Quota",
+    "CRM",
+    "Cold Outreach",
+    "Demos",
+    "MEDDIC",
+    "Forecasting",
+    "LinkedIn Sales Navigator",
+    "Contract Negotiation",
+    "Upsell"
+  ],
+  "exclude": [
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "sales",
+    "solutions_engineering",
+    "customer_success"
+  ]
+}

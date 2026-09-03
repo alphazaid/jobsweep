@@ -1,0 +1,41 @@
+{
+  "name": "security",
+  "description": "Security engineering, appsec, cloud security, detection",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|guard|officer|manager|director)\\b)(?=.*\\b(security|appsec|infosec|cyber\\w*|detection|threat|vulnerability|penetration|red team|blue team|soc)\\b)(?=.*\\b(engineer|analyst|researcher|architect|specialist|tester)\\b).*",
+  "queries": [
+    "security engineer",
+    "application security engineer",
+    "cloud security engineer",
+    "detection engineer",
+    "security analyst"
+  ],
+  "skills": [
+    "AWS",
+    "Kubernetes",
+    "Python",
+    "Go",
+    "Terraform",
+    "SIEM",
+    "Splunk",
+    "IAM",
+    "OAuth",
+    "Burp Suite",
+    "Threat Modeling",
+    "Penetration Testing",
+    "Linux",
+    "Networking",
+    "CISSP",
+    "OSCP",
+    "Zero Trust",
+    "Incident Response"
+  ],
+  "exclude": [
+    "clearance",
+    "manager",
+    "intern",
+    "contract"
+  ],
+  "discoverCategories": [
+    "security"
+  ]
+}

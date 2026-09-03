@@ -1,0 +1,39 @@
+{
+  "name": "legal",
+  "description": "Legal: attorney, counsel, paralegal, compliance",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|engineer|developer|assistant)\\b)(?=.*\\b(attorney|lawyer|counsel|paralegal|legal|compliance|contracts?|privacy|regulatory)\\b)(?=.*\\b(attorney|lawyer|counsel|paralegal|specialist|manager|analyst|associate|officer|director|lead)\\b).*",
+  "queries": [
+    "corporate counsel",
+    "attorney",
+    "paralegal",
+    "compliance analyst",
+    "contracts manager"
+  ],
+  "skills": [
+    "Contract Drafting",
+    "Negotiation",
+    "Corporate Law",
+    "Privacy",
+    "GDPR",
+    "CCPA",
+    "Compliance",
+    "Litigation",
+    "Employment Law",
+    "IP",
+    "M&A",
+    "Regulatory",
+    "Westlaw",
+    "LexisNexis",
+    "Ironclad",
+    "DocuSign",
+    "Due Diligence",
+    "Risk"
+  ],
+  "exclude": [
+    "intern",
+    "contract attorney"
+  ],
+  "discoverCategories": [
+    "legal"
+  ]
+}

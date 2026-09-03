@@ -40,24 +40,27 @@ export interface Discovered extends Company {
 }
 
 /**
- * Sweep freehire for engineering postings in `cities` (plus remote-US) and
- * collect the ATS boards behind them.
+ * Sweep freehire for postings in the preset's categories in `cities` (plus remote-US) and collect the ATS boards
+ * behind them. `categories` come from the preset (`discoverCategories`); `queries` seed the text search — the first
+ * query's last word ("engineer", "nurse", "analyst") is the broadest net for a field.
  */
-export async function discoverBoards(cities: string[], opts: { pages: number; days: number; log: (m: string) => void }): Promise<Discovered[]> {
-  const passes: URLSearchParams[] = []
-  for (const city of cities) {
-    const p = new URLSearchParams({ countries: "us", cities: city, category: "backend" })
-    passes.push(p)
+export async function discoverBoards(cities: string[], opts: { pages: number; days: number; categories: string[]; queries: string[]; log: (m: string) => void }): Promise<Discovered[]> {
+  if (!opts.categories.length) {
+    opts.log("discover: this preset has no freehire categories — add boards to companies.json by hand, or set discoverCategories in a custom preset")
+    return []
   }
+  const term = opts.queries[0]?.split(/\s+/).pop() ?? ""
+  const passes: URLSearchParams[] = []
+  for (const city of cities) passes.push(new URLSearchParams({ countries: "us", cities: city }))
   passes.push(new URLSearchParams({ countries: "us", work_mode: "remote" }))
 
   const found: Record<string, Discovered> = {}
   for (const pass of passes) {
-    for (const category of ["backend", "fullstack", "frontend", "devops", "ai_engineering", "mobile", "architecture"]) {
+    for (const category of opts.categories) {
       pass.set("category", category)
       for (let page = 0; page < opts.pages; page++) {
         const q = new URLSearchParams(pass)
-        q.set("q", "engineer")
+        if (term) q.set("q", term)
         q.set("semantic_ratio", "0")
         q.set("limit", String(PAGE))
         q.set("offset", String(page * PAGE))

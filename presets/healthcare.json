@@ -1,0 +1,39 @@
+{
+  "name": "healthcare",
+  "description": "Clinical and allied health: RN, NP, PA, therapist, technologist",
+  "titlePattern": "^(?!.*\\b(sales|recruit\\w*|intern|engineer|developer|software|marketing|administrative assistant)\\b)(?=.*\\b(nurse|rn|lpn|np|nurse practitioner|physician assistant|pa-c|physician|therapist|technologist|technician|clinician|clinical|medical|pharmacist|dietitian|sonographer|radiolog\\w*|paramedic)\\b).*",
+  "queries": [
+    "registered nurse",
+    "nurse practitioner",
+    "physician assistant",
+    "physical therapist",
+    "medical technologist"
+  ],
+  "skills": [
+    "BLS",
+    "ACLS",
+    "PALS",
+    "Epic",
+    "Cerner",
+    "Patient Care",
+    "ICU",
+    "ER",
+    "Med-Surg",
+    "Telemetry",
+    "Pediatrics",
+    "Oncology",
+    "IV Therapy",
+    "EMR",
+    "Case Management",
+    "Triage",
+    "Phlebotomy",
+    "Infection Control"
+  ],
+  "exclude": [
+    "intern",
+    "travel"
+  ],
+  "discoverCategories": [
+    "healthcare"
+  ]
+}
