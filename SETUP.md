@@ -26,10 +26,11 @@ If that fails:
 
 Check: `jobsweep --version` prints a version.
 
-## 2. Collect three things from the user
+## 2. Collect four things from the user
 
 | Ask | Flag | Example | Default if they shrug |
 |---|---|---|---|
+| What kind of role? | `--preset` | `swe`, `data`, `devops-sre`, `security`, `product`, `design`, `marketing`, `sales`, `finance`, `healthcare`, `legal`, `hr-recruiting`, `any` (`jobsweep presets` describes each) | `swe` — but ask; a nurse with the SWE gate finds nothing |
 | Which cities? | `--cities` | `"New York, NY;Austin, TX"` (separate with `;`) | none — required |
 | Comp floor (the top of a posted band must clear it)? | `--min-tc` | `200k` | none (all comp kept) |
 | Most years of experience a posting may require? | `--max-yoe` | `3` | none |
@@ -39,7 +40,7 @@ Optional, mention only if relevant: skills to score against (`--skills "Go,TypeS
 ## 3. Write the profile (no prompts)
 
 ```sh
-jobsweep init --cities "New York, NY" --min-tc 200k --max-yoe 3 --skills "TypeScript,Go,AWS" --json
+jobsweep init --preset swe --cities "New York, NY" --min-tc 200k --max-yoe 3 --skills "TypeScript,Go,AWS" --json
 ```
 
 Preview first with `--dry-run`: it validates the flags and prints the exact profile it would write (and which files) without touching anything — show that to the user and get a yes before running it for real. Then the same command without `--dry-run` writes `profile.json` and a seed `companies.json` under `~/.config/jobsweep`, and installs the agent skill (step 6) unless `--no-skill`. `--json` prints the paths written (never secrets). Re-running with fewer flags keeps existing values.

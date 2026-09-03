@@ -280,6 +280,7 @@ async function ui(argv: string[]): Promise<number> {
     skills: profile?.skills ?? [],
     isLocal: (j) => cityParams.some((p) => matchedLocation(j, { ...p } as SearchParams) !== null),
     storageKey: `jobsweep:${cities.join("|")}`,
+    theme: profile?.theme ?? undefined,
   })
   mkdirSync(UI_DIR(), { recursive: true })
   const out = v.out ?? join(UI_DIR(), `jobs-${last.date}.html`)

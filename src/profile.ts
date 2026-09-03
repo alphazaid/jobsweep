@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { ENV_PATH, PROFILE_PATH } from "./paths.ts"
+import { MODES, PALETTES, type Mode } from "./theme.ts"
 import { ALL_SOURCES, LEVELS, PRESETS, DEFAULT_PRESET, type Level, type Preset, type SearchParams, type Source } from "./types.ts"
 
 /** Standing search preferences, so `search`/`digest`/`ui` run with no flags. Written by `jobsweep init`. */
@@ -25,6 +26,8 @@ export interface Profile {
   linkedinAccepted: boolean
   /** Model for `interview`/`rank`, e.g. "openai:gpt-4o-mini"; null = not configured (JOBSWEEP_MODEL still applies). */
   model: string | null
+  /** Dashboard/triage starting look: { palette, mode }; the page's own switcher overrides it per browser. */
+  theme: { palette?: string; mode?: "light" | "dark" | "system" } | null
 }
 
 export const LINKEDIN_NOTICE =
@@ -67,7 +70,7 @@ export function defaultSources(): Source[] {
 }
 
 const PROFILE_KEYS: Record<string, true> = {
-  cities: true, preset: true, queries: true, query: true, titlePattern: true, minTc: true, maxYoe: true, levels: true, remote: true, days: true, sources: true, skills: true, exclude: true, linkedinAccepted: true, model: true,
+  cities: true, preset: true, queries: true, query: true, titlePattern: true, minTc: true, maxYoe: true, levels: true, remote: true, days: true, sources: true, skills: true, exclude: true, linkedinAccepted: true, model: true, theme: true,
 }
 
 function strings(raw: unknown, key: string): string[] | null {
@@ -123,6 +126,7 @@ export function parseProfile(raw: Record<string, unknown>): Profile {
     exclude: raw.exclude == null ? preset.exclude : (strings(raw.exclude, "exclude") ?? []),
     linkedinAccepted: raw.linkedinAccepted === true,
     model: raw.model == null ? null : String(raw.model),
+    theme: parseTheme(raw.theme),
   }
 }
 
@@ -130,4 +134,20 @@ export async function loadProfile(path = PROFILE_PATH()): Promise<Profile | null
   const f = Bun.file(path)
   if (!(await f.exists())) return null
   return parseProfile((await f.json()) as Record<string, unknown>)
+}
+
+function parseTheme(raw: unknown): Profile["theme"] {
+  if (raw == null) return null
+  if (typeof raw !== "object") bad("theme must be an object like { \"palette\": \"ocean\", \"mode\": \"dark\" }")
+  const t = raw as Record<string, unknown>
+  const out: NonNullable<Profile["theme"]> = {}
+  if (t.palette != null) {
+    if (!PALETTES[String(t.palette)]) bad(`theme.palette must be one of ${Object.keys(PALETTES).join(", ")}`)
+    out.palette = String(t.palette)
+  }
+  if (t.mode != null) {
+    if (!MODES.includes(t.mode as Mode)) bad(`theme.mode must be one of ${MODES.join(", ")}`)
+    out.mode = t.mode as Mode
+  }
+  return out
 }

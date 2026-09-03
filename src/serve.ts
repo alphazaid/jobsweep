@@ -145,6 +145,7 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
               carriedIds: new Set(last.carriedIds ?? []),
               decisions: store.decisions(),
               runs: store.runs(),
+              theme: o.profile?.theme ?? undefined,
             }),
           )
         }
@@ -165,6 +166,7 @@ export function startServer(o: ServeOptions): ReturnType<typeof Bun.serve> {
               storageKey: `jobsweep:${last.params.cities.join("|")}`,
               decisions: store.decisions(),
               serverSync: true,
+              theme: o.profile?.theme ?? undefined,
             }),
           )
         }

@@ -11,7 +11,7 @@ allowed-tools: Bash({{JOBSWEEP_TOOL}}:*) Bash(jq:*) Read
 
 # jobsweep
 
-The user has set up jobsweep (`~/.config/jobsweep/profile.json` holds their cities, comp floor, years, skills). The CLI is invoked as `{{JOBSWEEP}}` — use exactly that launcher. Your job is to **run the tool and read what it returns** — never describe what it would do, never invent postings. Every number you state comes from a command you ran this turn.
+The user has set up jobsweep (`~/.config/jobsweep/profile.json` holds their role preset — swe, data, healthcare, finance, … — cities, comp floor, years, skills). Read the preset before judging postings: a `healthcare` profile wants nurses, not engineers. The CLI is invoked as `{{JOBSWEEP}}` — use exactly that launcher. Your job is to **run the tool and read what it returns** — never describe what it would do, never invent postings. Every number you state comes from a command you ran this turn.
 
 ## Not set up yet?
 

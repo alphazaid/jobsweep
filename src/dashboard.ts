@@ -1,3 +1,4 @@
+import { themeCss, themeScript, themeSwitcher, type ThemePrefs } from "./theme.ts"
 import type { Decision, Job, RunSummary } from "./types.ts"
 
 export interface DashboardData {
@@ -8,6 +9,7 @@ export interface DashboardData {
   carriedIds: Set<string>
   decisions: Record<string, Decision>
   runs: RunSummary[]
+  theme?: ThemePrefs
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
@@ -67,12 +69,15 @@ export function renderDashboard(d: DashboardData): string {
 
   const card = (n: string | number, label: string, sub = "") => `<div class="card"><div class="n">${n}</div><div class="l">${label}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>jobsweep · ${esc(d.cities.join(" / "))}</title>
+${themeScript(d.theme ?? {})}
 <style>
-:root{--bg:#F5F6F8;--panel:#fff;--ink:#16181D;--mute:#6B7280;--rule:#DDE0E5;--accent:#1D4ED8;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+${themeCss()}
+:root{--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 var(--sans);color:var(--ink);background:var(--bg)}
-header{display:flex;align-items:center;gap:16px;padding:12px 24px;background:var(--panel);border-bottom:1px solid var(--rule)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 24px;background:var(--panel);border-bottom:1px solid var(--rule)}
+header .meta{white-space:nowrap}
 header h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-.01em}header .meta{color:var(--mute);font-size:12px}
-nav{margin-left:auto;display:flex;gap:14px;font-size:13px}nav a{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent}nav a:hover{border-color:var(--ink)}nav a.cur{border-color:var(--ink)}
+nav{margin-left:auto;display:flex;gap:14px;font-size:13px;white-space:nowrap}nav a{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent}nav a:hover{border-color:var(--ink)}nav a.cur{border-color:var(--ink)}
 main{max-width:1100px;margin:0 auto;padding:20px 24px 60px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px}
 .card{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:12px 14px}.card .n{font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.02em}.card .l{color:var(--mute);font-size:12px;margin-top:2px}.card .s{font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:4px}
@@ -84,12 +89,12 @@ h2{font-size:13px;font-weight:600;color:var(--mute);text-transform:uppercase;let
 .mute{color:var(--mute)}
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 button,.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:5px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none}
-button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}button[disabled]{opacity:.5;cursor:default}
-pre#log{background:#0F1115;color:#D7DAE0;font-family:var(--mono);font-size:12px;padding:12px;border-radius:6px;max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:10px;display:none}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}button[disabled]{opacity:.5;cursor:default}
+pre#log{background:var(--code);color:var(--codeInk);font-family:var(--mono);font-size:12px;padding:12px;border-radius:6px;max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:10px;display:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 </style></head><body>
 <header><h1>jobsweep</h1><span class="meta">${esc(d.cities.join(" / "))} · last search ${esc(d.date)}${lastRun ? ` · ${new Date(lastRun.ts).toLocaleTimeString()}` : ""}</span>
-<nav><a class="cur" href="/">Dashboard</a><a href="/triage">Triage</a><a href="/api/jobs.csv">Export CSV</a><a href="/api/jobs.json">Export JSON</a><a href="/api/decisions.json">Decisions</a></nav></header>
+<nav><a class="cur" href="/">Dashboard</a><a href="/triage">Triage</a><a href="/api/jobs.csv">Export CSV</a><a href="/api/jobs.json">Export JSON</a><a href="/api/decisions.json">Decisions</a></nav>${themeSwitcher()}</header>
 <main>
 <div class="cards">
 ${card(jobs.length, "open matches", `${d.carriedIds.size} carried · ${d.newIds.size} new`)}

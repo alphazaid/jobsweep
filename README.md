@@ -1,6 +1,6 @@
 # jobsweep
 
-Sweep hundreds of company job boards, Adzuna, and freehire for software engineering roles that match **your city, comp floor, and years of experience**. Triage them on a local dashboard with keyboard shortcuts, export everything to CSV, and — if you bring a model key — have your resume interviewed and every surviving posting scored with reasons.
+Sweep hundreds of company job boards, Adzuna, and freehire for roles that match **your field, city, comp floor, and years of experience** — software engineering by default, with presets for data, DevOps/SRE, security, product, design, marketing, sales, finance, healthcare, legal, and HR. Triage them on a local dashboard with keyboard shortcuts, export everything to CSV, and — if you bring a model key — have your resume interviewed and every surviving posting scored with reasons.
 
 Runs on your machine. No account, no hosted service, no telemetry. The core is deterministic: regexes, a title gate, a comp parser, a years parser, metro aliases, SQLite. A model is optional and only ever touches what you explicitly hand it.
 
@@ -23,7 +23,9 @@ MATCHES (comp posted, sorted by ceiling)  * = new since last run  ° = carried f
 - [Export](#export)
 - [With a model (optional)](#with-a-model-optional)
 - [What it searches](#what-it-searches)
+- [Fields and presets](#fields-and-presets)
 - [How filtering works](#how-filtering-works)
+- [Dashboard themes](#dashboard-themes)
 - [Profile and config](#profile-and-config)
 - [Running it on a schedule](#running-it-on-a-schedule)
 - [Security and data handling](#security-and-data-handling)
@@ -61,8 +63,9 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 
 | Command | What it does |
 |---|---|
-| `jobsweep init` | Interactive setup: cities, comp floor, years, skills, sources, Adzuna key, LinkedIn opt-in. Writes `profile.json`, `companies.json`, `.env`. |
-| `jobsweep init --cities "…" [--min-tc 200k] [--max-yoe 3] [--skills "…"] [--linkedin] [--no-skill] [--json] [--dry-run]` | The same setup with no prompts, for scripts and agents. `--dry-run` previews the profile without writing. Adzuna keys are read from `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` in the environment, never flags. |
+| `jobsweep init` | Interactive setup: role preset, cities, comp floor, years, skills, sources, Adzuna key, LinkedIn opt-in. Writes `profile.json`, `companies.json`, `.env`. |
+| `jobsweep presets` | List the role presets and what each searches. |
+| `jobsweep init [--preset swe] --cities "…" [--min-tc 200k] [--max-yoe 3] [--skills "…"] [--linkedin] [--no-skill] [--json] [--dry-run]` | The same setup with no prompts, for scripts and agents. `--dry-run` previews the profile without writing. Adzuna keys are read from `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` in the environment, never flags. |
 | `jobsweep doctor [--json]` | Check the setup: profile, boards, keys, skill, last search, schedule. Exit 1 if anything required is missing; each failing line names its fix. |
 | `jobsweep setup-guide` | Print SETUP.md — the agent-followable setup procedure. |
 | `jobsweep search [flags]` | The sweep. Flags override the profile; with a profile, no flags needed. Writes `digests/last-search.json` and records a run. |
@@ -159,6 +162,16 @@ jobsweep serve -j     # the same as JSON
 
 The server binds `127.0.0.1` only and has no auth: nothing off your machine can reach it, and the data is your own search results. Don't put it behind a reverse proxy.
 
+## Dashboard themes
+
+Both pages (dashboard and triage) have a palette picker and light / dark / system buttons — top right on the dashboard, in the triage footer. Five flat palettes, each with a light and a dark variant: **Graphite** (default), **Ocean**, **Forest**, **Ember**, **Mono**. No gradients, no glow. The choice is applied before first paint (no flash) and remembered per browser. Set a starting point in `profile.json`:
+
+```json
+"theme": { "palette": "ocean", "mode": "dark" }
+```
+
+`mode: "system"` follows the OS setting.
+
 ## Export
 
 ```sh
@@ -232,6 +245,33 @@ Company boards are cached title-gated (only matching postings, descriptions capp
 
 LinkedIn has no public job API. The connector reads LinkedIn's public guest job pages from your machine, which LinkedIn's terms prohibit doing automatically. It is therefore **off unless you turn it on** (`jobsweep init` asks; or `--linkedin` per run), it only ever runs locally, keeps volume low (2 requests in flight, backoff, 14-day cache), and you use it at your own risk for your own personal search. Don't run it from a shared server or on behalf of other people.
 
+## Fields and presets
+
+The first question `init` asks is what kind of role. A preset supplies the title gate, the default searches, the skills to score against, the title words to exclude, and which freehire categories `companies discover` scans for boards. Every one of those can be overridden in `profile.json`.
+
+```sh
+jobsweep presets                          # the list, with what each searches
+jobsweep init --preset healthcare --cities "Dallas, TX"
+```
+
+| Preset | Roles |
+|---|---|
+| `swe` (default) | IC software engineering |
+| `data` | data engineer / scientist / analyst, analytics engineer, ML engineer |
+| `devops-sre` | DevOps, SRE, platform, infrastructure, cloud |
+| `security` | security engineering, appsec, cloud security, detection |
+| `product` | product management |
+| `design` | product / UX / UI design, UX research |
+| `marketing` | growth, product marketing, content, demand gen |
+| `sales` | AE, SDR/BDR, account management, solutions |
+| `finance` | FP&A, financial analyst, accountant, controller |
+| `healthcare` | RN, NP, PA, therapists, technologists |
+| `legal` | attorney, counsel, paralegal, compliance |
+| `hr-recruiting` | recruiting, HRBP, people ops, talent |
+| `any` | no title gate — set `titlePattern`, `queries`, `skills` yourself |
+
+The seed company boards skew tech; for other fields the reach comes from Adzuna and freehire (which carries healthcare, finance, legal, sales, marketing, HR categories) plus whatever `companies discover` finds. A live check: `healthcare` in Dallas returned 154 open postings, 107 with posted comp — NPs, PAs, physician reviewers — through the same pipeline. Switching presets resets `skills`/`exclude` to the new field's; re-running with the same preset keeps your edits.
+
 ## How filtering works
 
 - **Title gate.** Every result must look like an IC software role (`presets/swe.json`): "Backend Engineer", "Member of Technical Staff", "Founding Engineer" pass; Sales/Solutions/QA/Hardware/DevOps/ML/Recruiter/Response Engineer titles don't. Override with `titlePattern` in the profile or `--title-re`.
@@ -276,7 +316,8 @@ Everything user-specific lives in one directory — `~/.config/jobsweep` (overri
   "skills": ["TypeScript", "Go", "AWS"],
   "exclude": ["clearance", "manager"],
   "linkedinAccepted": false,
-  "model": null
+  "model": null,
+  "theme": null
 }
 ```
 
@@ -307,13 +348,13 @@ Prefer your own cron? `jobsweep digest` is the command to point it at. Add `--ra
 
 ```sh
 bun install
-bun test            # 183 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 189 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui
 ```
 
-Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/schedule.ts` the OS timers; `src/init.ts` (one `writeSetup` core behind the prompts and the flags) + `src/doctor.ts`; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
+Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/schedule.ts` the OS timers; `src/init.ts` (one `writeSetup` core behind the prompts and the flags) + `src/doctor.ts`; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/*.json` one per field (title gate, queries, skills, exclude, discover categories); `src/theme.ts` palettes; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
 
 CI typechecks and runs the suite on every push; tagging `v*` builds and attaches the five binaries to a GitHub Release.
 

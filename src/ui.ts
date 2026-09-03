@@ -1,3 +1,4 @@
+import { themeCss, themeScript, themeSwitcher, type ThemePrefs } from "./theme.ts"
 import type { Decision, Job } from "./types.ts"
 
 export interface UiOptions {
@@ -18,6 +19,7 @@ export interface UiOptions {
   decisions?: Record<string, Decision>
   /** When served over HTTP, every mark/note is POSTed to /api/decisions as well as kept in localStorage. */
   serverSync?: boolean
+  theme?: ThemePrefs
 }
 
 interface UiJob {
@@ -41,7 +43,7 @@ interface UiJob {
 }
 
 const CSS = `
-:root{--bg:#F5F6F8;--panel:#FFFFFF;--ink:#16181D;--mute:#6B7280;--rule:#DDE0E5;--apply:#1D4ED8;--maybe:#B45309;--skip:#6B7280;--done:#047857;--sel:#EEF2FF;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+:root{--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
 *{box-sizing:border-box}html,body{margin:0;height:100%}
 body{font:14px/1.45 var(--sans);color:var(--ink);background:var(--bg);display:grid;grid-template-rows:auto 1fr;height:100vh}
 header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--rule)}
@@ -52,13 +54,13 @@ header .meta{color:var(--mute);font-size:12px}
 .f input[type=search]{width:180px}
 .seg{display:inline-flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
 .seg button{font:inherit;font-size:12px;border:0;background:var(--panel);color:var(--mute);padding:4px 9px;cursor:pointer;border-right:1px solid var(--rule)}
-.seg button:last-child{border-right:0}.seg button[aria-pressed=true]{background:var(--ink);color:#fff}
+.seg button:last-child{border-right:0}.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
 .counts{margin-left:auto;display:flex;gap:14px;font-family:var(--mono);font-size:12px;color:var(--mute)}
 .counts b{color:var(--ink);font-weight:600}
 main{display:grid;grid-template-columns:minmax(420px,1fr) minmax(420px,1.1fr);min-height:0}
 #list{overflow:auto;border-right:1px solid var(--rule);background:var(--panel)}
 .row{display:grid;grid-template-columns:8px 1fr 150px 56px 46px;gap:0 12px;align-items:center;padding:9px 14px 9px 10px;border-bottom:1px solid var(--rule);cursor:pointer}
-.row:hover{background:#FAFAFC}.row[aria-selected=true]{background:var(--sel)}
+.row:hover{background:color-mix(in srgb,var(--sel) 50%,var(--panel))}.row[aria-selected=true]{background:var(--sel)}
 .row .st{width:4px;height:36px;border-radius:2px;background:transparent}
 .row[data-s=apply] .st{background:var(--apply)}.row[data-s=maybe] .st{background:var(--maybe)}.row[data-s=skip] .st{background:var(--skip)}.row[data-s=applied] .st{background:var(--done)}
 .row[data-s=skip] .t,.row[data-s=skip] .c{color:var(--mute)}
@@ -72,7 +74,7 @@ main{display:grid;grid-template-columns:minmax(420px,1fr) minmax(420px,1.1fr);mi
 .band .bar.est{background:repeating-linear-gradient(90deg,var(--mute) 0 3px,transparent 3px 6px)}
 .band .lab{position:absolute;top:24px;font-family:var(--mono);font-size:10.5px;color:var(--mute);white-space:nowrap}
 .band .none{position:absolute;top:10px;font-family:var(--mono);font-size:11px;color:var(--mute)}
-.ai{font-family:var(--mono);font-size:11px;color:#fff;background:var(--mute);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.ai{font-family:var(--mono);font-size:11px;color:var(--panel);background:var(--mute);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:1px}
 .ai[data-f="5"],.ai[data-f="4"]{background:var(--apply)}.ai[data-f="3"]{background:var(--maybe)}
 .aibox{border:1px solid var(--rule);border-left:3px solid var(--ink);border-radius:5px;padding:10px 12px;margin:0 0 16px;max-width:72ch;font-size:13.5px}
 .aibox b{font-weight:600}.aibox ul{margin:6px 0 0;padding-left:18px}.aibox .lab{font-family:var(--mono);font-size:11px;color:var(--mute);margin-right:6px}
@@ -86,17 +88,17 @@ main{display:grid;grid-template-columns:minmax(420px,1fr) minmax(420px,1.1fr);mi
 .facts b{display:block;color:var(--ink);font-weight:500;font-size:13px;margin-top:2px}
 .acts{display:flex;gap:8px;margin:14px 0 18px;flex-wrap:wrap}
 .acts button,.acts a{font:inherit;font-size:13px;padding:7px 12px;border-radius:5px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none}
-.acts a.open{background:var(--ink);color:#fff;border-color:var(--ink)}
+.acts a.open{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .acts button[data-s=apply]{border-color:var(--apply);color:var(--apply)}.acts button[data-s=maybe]{border-color:var(--maybe);color:var(--maybe)}
 .acts button[data-s=applied]{border-color:var(--done);color:var(--done)}
-.acts button[aria-pressed=true]{color:#fff}.acts button[data-s=apply][aria-pressed=true]{background:var(--apply)}.acts button[data-s=maybe][aria-pressed=true]{background:var(--maybe)}
+.acts button[aria-pressed=true]{color:var(--panel)}.acts button[data-s=apply][aria-pressed=true]{background:var(--apply)}.acts button[data-s=maybe][aria-pressed=true]{background:var(--maybe)}
 .acts button[data-s=skip][aria-pressed=true]{background:var(--skip);border-color:var(--skip)}.acts button[data-s=applied][aria-pressed=true]{background:var(--done)}
 .acts kbd{font-family:var(--mono);font-size:10px;opacity:.6;margin-left:5px}
 .skills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px}
 .skills span{font-family:var(--mono);font-size:11px;padding:2px 6px;border:1px solid var(--rule);border-radius:3px;color:var(--mute)}
 .skills span.hit{border-color:var(--ink);color:var(--ink)}
-.desc{white-space:pre-wrap;font-size:13.5px;line-height:1.55;max-width:72ch;color:#2A2D33}
-.desc mark{background:#FEF3C7;color:inherit;padding:0 1px}
+.desc{white-space:pre-wrap;font-size:13.5px;line-height:1.55;max-width:72ch;color:var(--ink);opacity:.92}
+.desc mark{background:color-mix(in srgb,var(--maybe) 22%,var(--panel));color:inherit;padding:0 1px}
 .note textarea{width:100%;max-width:72ch;font:inherit;font-size:13px;border:1px solid var(--rule);border-radius:5px;padding:8px;min-height:60px;resize:vertical}
 footer{position:fixed;bottom:0;right:0;left:0;padding:6px 16px;font-family:var(--mono);font-size:11px;color:var(--mute);background:var(--panel);border-top:1px solid var(--rule);display:flex;gap:18px}
 footer a{color:var(--mute)}
@@ -227,7 +229,7 @@ export function renderUi(jobs: Job[], o: UiOptions): string {
   const json = (v: unknown) => JSON.stringify(v).replace(/<\//g, "<\\/")
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escHtml(o.title)}</title><style>${CSS}</style></head><body>
+<title>${escHtml(o.title)}</title>${themeScript(o.theme ?? {})}<style>${themeCss()}${CSS}</style></head><body>
 <header>
   <h1>${escHtml(o.title)}</h1><span class="meta">${escHtml(o.subtitle)}</span>
   <div class="f"><span class="seg" id="where"><button data-v="all" aria-pressed="true">All</button><button data-v="local">Local</button><button data-v="remote">Remote</button></span></div>
@@ -242,7 +244,7 @@ export function renderUi(jobs: Job[], o: UiOptions): string {
   <section id="list" role="listbox" aria-label="Postings"></section>
   <section id="detail"><div class="empty">Select a posting. ↑↓ or j/k to move · a apply · m maybe · x skip · d applied · o open in new tab</div></section>
 </main>
-<footer><span id="shown"></span>${o.serverSync ? '<a href="/">Dashboard</a>' : ""}<span>a apply · m maybe · x skip · d applied · o open · / search</span><a href="#" id="export">Export decisions (JSON)</a><a href="#" id="reset">Clear decisions</a></footer>
+<footer><span id="shown"></span>${themeSwitcher()}${o.serverSync ? '<a href="/">Dashboard</a>' : ""}<span>a apply · m maybe · x skip · d applied · o open · / search</span><a href="#" id="export">Export decisions (JSON)</a><a href="#" id="reset">Clear decisions</a></footer>
 <script>
 const JOBS=${json(data)};
 const KEY=${json(o.storageKey)};
