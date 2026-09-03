@@ -251,8 +251,9 @@ const SKILLS=${json(o.skills)};
 const HAS_PICKS=${json(!!o.picks?.size)};
 const SYNC=${json(!!o.serverSync)};
 const SERVER_STATE=${json(Object.fromEntries(Object.entries(o.decisions ?? {}).map(([id, d]) => [id, { s: d.status, n: d.note, t: d.updatedAt }])))};
-// Server marks win over a stale localStorage copy; the page then keeps both in step.
-let state=Object.assign({},JSON.parse(localStorage.getItem(KEY)||"{}"),SERVER_STATE);
+// Served: the server is the only store, so a mark cleared there can't resurrect from a stale browser copy.
+// Standalone file: localStorage is the store.
+let state=SYNC?SERVER_STATE:JSON.parse(localStorage.getItem(KEY)||"{}");
 ${SCRIPT}
 </script></body></html>`
 }

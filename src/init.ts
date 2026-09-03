@@ -3,6 +3,7 @@ import companiesSeed from "../companies.seed.json"
 import { knownMetro } from "./filters.ts"
 import { COMPANIES_PATH, ENV_PATH, PROFILE_PATH, configDir } from "./paths.ts"
 import { LINKEDIN_NOTICE, parseMoney } from "./profile.ts"
+import { defaultSkillDirs, installSkill } from "./skill.ts"
 import { DEFAULT_PRESET } from "./types.ts"
 
 const out = (s = "") => process.stdout.write(s + "\n")
@@ -84,6 +85,10 @@ export async function init(): Promise<number> {
 
   out(`\nWrote ${profilePath}${adzId ? ` and ${envPath}` : ""}.`)
   out(`Company boards: ${companiesPath} (${companiesSeed.length} seeded). Run \`jobsweep companies discover\` to add every board hiring in your cities — takes a couple of minutes.`)
-  out("Next: `jobsweep search`, then `jobsweep ui --open` to triage.")
+  const skillDirs = defaultSkillDirs()
+  if (yes(`Install the jobsweep skill so your coding agent (Claude Code, Codex, Cursor, OMP…) runs jobsweep when you ask it to find or rank jobs? Writes SKILL.md under ${skillDirs.join(" and ")}`, true)) {
+    for (const p of installSkill(skillDirs)) out(`  installed ${p}`)
+  }
+  out("Next: `jobsweep search`, then `jobsweep serve --open` for the dashboard — or just ask your agent to find jobs.")
   return 0
 }

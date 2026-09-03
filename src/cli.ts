@@ -16,7 +16,8 @@ import { CANDIDATE_PATH, COMPANIES_PATH, DIGEST_DIR, PROFILE_PATH, UI_DIR, confi
 import { defaultSources, loadEnv, loadProfile, parseMoney, type Profile } from "./profile.ts"
 import { PROVIDERS } from "./providers/index.ts"
 import type { ProviderCtx } from "./providers/provider.ts"
-import { rankJobs, sortByAi } from "./rank.ts"
+import { attachReviews, rankJobs, sanitizeResult, saveReview, sortByAi } from "./rank.ts"
+import { installSkill, renderSkill, resolveLauncher } from "./skill.ts"
 import { readLastSearch, startServer, statsOf, summaryText } from "./serve.ts"
 import { toCsv, toRows } from "./export.ts"
 import { run } from "./run.ts"
@@ -39,6 +40,13 @@ USAGE
   jobsweep serve -s | -j              The same numbers on the console (summary / JSON), no server.
   jobsweep export [--csv|--json] [--out <file>]
                                       Every posting from the last search with comp, years, fit, AI review, your decision, URL.
+  jobsweep skill [--install] [--dir <path>]
+                                      Print the agent skill (SKILL.md), or install it so your coding agent — Claude Code,
+                                      Codex, Cursor, OMP, anything reading ~/.agents/skills — runs jobsweep when you ask
+                                      it to find, rank, or export jobs. \`init\` offers this too.
+  jobsweep review [--model <name>]    Attach reviews written by the calling agent (no API key needed): JSON on stdin
+                                      {"results":[{"id","fit":1-5,"reason","dealbreakers":[],"emphasize":[]}]} or one via
+                                      --id --fit --reason. Same bounds as \`rank\`; shown in ui/serve/export/digest.
 
 WITH A MODEL (optional — bring your own key; search/digest never call a model unless asked)
   jobsweep interview [--resume <file>] [--notes <file>]...
@@ -201,9 +209,10 @@ async function search(argv: string[]): Promise<number> {
 
   const store = new Store()
   const result = await run(params, profile ?? { skills: [], exclude: [] }, makeCtx(await loadCompanies(v.companies ?? COMPANIES_PATH()), store), store)
+  const jobs = attachReviews(result.jobs, store)
   store.close()
 
-  let shown = v.new ? result.jobs.filter((j) => result.newIds[j.id]) : result.jobs
+  let shown = v.new ? jobs.filter((j) => result.newIds[j.id]) : jobs
   if (v["strict-comp"]) shown = shown.filter((j) => j.salary)
   const matches = shown.filter((j) => j.salary)
   const unknownComp = shown.filter((j) => !j.salary)
@@ -219,7 +228,7 @@ async function search(argv: string[]): Promise<number> {
   process.stdout.write(render(report, fmt) + "\n")
   // The UI and digest build from the last search.
   mkdirSync(DIGEST_DIR(), { recursive: true })
-  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date: new Date().toISOString().slice(0, 10), params: report.params, jobs: result.jobs, carriedIds: Object.keys(result.carriedIds), newIds: Object.keys(result.newIds) }))
+  await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date: new Date().toISOString().slice(0, 10), params: report.params, jobs, carriedIds: Object.keys(result.carriedIds), newIds: Object.keys(result.newIds) }))
   return 0
 }
 
@@ -326,7 +335,7 @@ async function digest(argv: string[]): Promise<number> {
   const store = new Store()
   const result = await run(paramsFor(profile, {}), profile, makeCtx(await loadCompanies(v.companies ?? COMPANIES_PATH()), store), store)
   // With --rank, only what's new gets reviewed: the digest's job is "what came in", and this bounds the model spend.
-  let jobs = result.jobs
+  let jobs = attachReviews(result.jobs, store)
   if (model && candidate) {
     const freshIds = new Set(Object.keys(result.newIds))
     const reviewed = await rankJobs(jobs.filter((j) => freshIds.has(j.id)), { model, candidate, cache: store, log: (m) => process.stderr.write(`# ${m}\n`) })
@@ -480,6 +489,59 @@ async function exportCmd(argv: string[]): Promise<number> {
   return 0
 }
 
+async function review(argv: string[]): Promise<number> {
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { model: { type: "string", default: "agent" }, id: { type: "string" }, fit: { type: "string" }, reason: { type: "string" }, dealbreaker: { type: "string", multiple: true }, emphasize: { type: "string", multiple: true }, file: { type: "string" } } })
+  const lastPath = join(DIGEST_DIR(), "last-search.json")
+  if (!existsSync(lastPath)) fail("no search yet — run `jobsweep search` first", "NO_SEARCH")
+  const last = (await Bun.file(lastPath).json()) as LastSearch
+  let items: unknown[]
+  if (v.id) {
+    if (!v.fit) fail("--fit 1-5 is required with --id", "BAD_ARG")
+    items = [{ id: v.id, fit: v.fit, reason: v.reason ?? "", dealbreakers: v.dealbreaker ?? [], emphasize: v.emphasize ?? [] }]
+  } else {
+    const text = v.file ? await Bun.file(v.file).text() : await Bun.stdin.text()
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      fail("expected JSON on stdin (or --file): {\"results\":[{\"id\",\"fit\",\"reason\",...}]} or a bare array", "BAD_JSON")
+    }
+    items = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && "results" in parsed && Array.isArray(parsed.results) ? parsed.results : []
+    if (!items.length) fail("no results in input", "BAD_JSON")
+  }
+  const byId = new Map(last.jobs.map((j) => [j.id, j]))
+  const store = new Store()
+  let applied = 0
+  const unknown: string[] = []
+  const malformed: number[] = []
+  items.forEach((raw, i) => {
+    const r = sanitizeResult(raw, v.model)
+    if (!r) return void malformed.push(i)
+    const j = byId.get(r.id)
+    if (!j) return void unknown.push(r.id)
+    j.ai = r.review
+    saveReview(j, r.review, store)
+    applied++
+  })
+  store.close()
+  await Bun.write(lastPath, JSON.stringify(last))
+  const notes = [unknown.length ? `${unknown.length} id(s) not in the last search: ${unknown.slice(0, 5).join(", ")}${unknown.length > 5 ? ", …" : ""}` : "", malformed.length ? `${malformed.length} item(s) malformed (need id and a numeric fit)` : ""].filter(Boolean)
+  process.stdout.write(`${applied} review(s) saved as ${v.model}${notes.length ? ` · ${notes.join(" · ")}` : ""}\n`)
+  return applied ? 0 : 1
+}
+
+function skill(argv: string[]): number {
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { install: { type: "boolean", default: false }, dir: { type: "string", multiple: true } } })
+  const launcher = resolveLauncher()
+  if (!v.install) {
+    process.stdout.write(renderSkill(launcher))
+    return 0
+  }
+  for (const p of installSkill(v.dir, launcher)) process.stdout.write(`installed ${p}\n`)
+  process.stdout.write(`the skill invokes the CLI as: ${launcher}\n`)
+  return 0
+}
+
 function cache(argv: string[]): number {
   const store = new Store()
   if (argv[0] === "clear") {
@@ -507,6 +569,8 @@ const job =
   : cmd === "cache" ? Promise.resolve(cache(rest))
   : cmd === "serve" ? serve(rest)
   : cmd === "export" ? exportCmd(rest)
+  : cmd === "review" ? review(rest)
+  : cmd === "skill" ? Promise.resolve(skill(rest))
   : cmd === "--version" || cmd === "-v" ? (process.stdout.write(`${pkg.version}\n`), Promise.resolve(0))
   : cmd === undefined || cmd === "--help" || cmd === "-h" ? (process.stdout.write(HELP), Promise.resolve(cmd ? 0 : 1))
   : fail(`unknown command "${cmd}"`, "BAD_CMD")

@@ -21,7 +21,7 @@ export function unfence(text: string): string {
 }
 
 /** One review as the model should have returned it, or null when the item is unusable. Every field is checked and bounded. */
-function sanitizeResult(v: unknown, model: string): { id: string; review: AiReview } | null {
+export function sanitizeResult(v: unknown, model: string): { id: string; review: AiReview } | null {
   if (!v || typeof v !== "object" || !("id" in v) || typeof v.id !== "string" || !("fit" in v)) return null
   const fit = Number(v.fit)
   if (!Number.isFinite(fit)) return null
@@ -61,6 +61,25 @@ function postingBlock(j: Job): string {
 /** What the model actually sees of a posting; if any of it changes, the cached review is stale. */
 function contentHash(j: Job): string {
   return Bun.hash(`${j.title}\n${j.company}\n${j.location}\n${j.workMode}\n${JSON.stringify(j.salary)}\n${j.yoeMin}\n${(j.description ?? "").slice(0, DESC_CHARS)}`).toString(36)
+}
+
+/**
+ * Reviews written by the calling agent (`jobsweep review`) rather than a configured model. Keyed by posting content
+ * only: the agent's judgment stands until the posting itself changes. `attachReviews` puts them back on each search.
+ */
+const reviewKey = (j: Job) => `review:${j.id}:${contentHash(j)}`
+
+export function saveReview(j: Job, review: AiReview, cache: FeedCache): void {
+  cache.set(reviewKey(j), JSON.stringify(review))
+}
+
+/** Jobs with a stored agent review get it back; jobs that already carry a review keep it. */
+export function attachReviews(jobs: Job[], cache: FeedCache): Job[] {
+  return jobs.map((j) => {
+    if (j.ai) return j
+    const hit = cache.get(reviewKey(j), RANK_TTL_MS)
+    return hit ? { ...j, ai: JSON.parse(hit) as AiReview } : j
+  })
 }
 
 export interface RankOptions {

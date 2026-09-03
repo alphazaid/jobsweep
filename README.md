@@ -62,6 +62,8 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | `jobsweep companies [--verify]` | List company boards; `--verify` hits each one live (never touches the cache). |
 | `jobsweep companies discover` | Add every Greenhouse/Lever/Ashby board hiring in your cities, found via freehire. Agency/aggregator boards are skipped. |
 | `jobsweep cache [clear]` | Show cache size, or drop cached feeds (postings and their seen-dates are kept). |
+| `jobsweep skill [--install] [--dir <path>]` | Print the agent skill, or install it into `~/.agents/skills` (+ `~/.claude/skills`) with this machine's launcher filled in. |
+| `jobsweep review [--model <name>]` | Attach reviews written by the calling agent — JSON on stdin or `--id --fit --reason`. No key needed. |
 | `jobsweep interview [--resume <file>] [--notes <file>]…` | Model: build `candidate.md` from your resume/notes with your confirmation at each step. |
 | `jobsweep rank` | Model: score the last search's survivors 1–5 against `candidate.md`, with reasons. Cached. |
 
@@ -156,6 +158,29 @@ One row per posting from the last search. Columns:
 `compKind` is `parsed` (from the posting), `predicted` (Adzuna's estimate), or empty. `decision`/`note` come from the triage page. CSV is RFC 4180 (commas, quotes, newlines inside cells are quoted), and cells that a spreadsheet would run as a formula (`=`, `+`, `-`, `@` prefixes) are neutralised with a leading apostrophe — posting titles are web content, so this matters.
 
 The standalone `ui` page has its own **Export decisions** link (JSON of your marks) for when you're working from the file rather than the server.
+
+## Use it from your coding agent
+
+The intended way to use jobsweep day to day: set it up once, then just ask your agent.
+
+```sh
+jobsweep skill --install      # init offers this too
+```
+
+That writes an [Agent Skill](https://agentskills.io) to `~/.agents/skills/jobsweep/SKILL.md` (the cross-client location — Codex, Cursor, OMP, and others read it) and `~/.claude/skills/jobsweep/SKILL.md` (Claude Code), with the launcher for *this* machine filled in: `jobsweep` if it's on your PATH, else the absolute path of the binary or `bun run …/src/cli.ts`. Then, in any of those agents:
+
+> find me jobs · what's new · jobs in Austin paying 180k+ · which of these should I apply to · rank them · open the dashboard · export the list
+
+…and the agent runs the CLI, reads the JSON, and answers from it. **Ranking needs no API key**: the agent you're already talking to *is* the model. The skill tells it to read each posting and hand its verdicts back with `jobsweep review`, so they land on the dashboard, the triage page, and exports exactly as a configured model's would:
+
+```sh
+jobsweep review <<'EOF'
+{"results":[{"id":"greenhouse:acme:123","fit":4,"reason":"Backend Go, 2+ yrs, $210k top clears the floor.","dealbreakers":[],"emphasize":["payments experience"]}]}
+EOF
+jobsweep review --id linkedin:4455 --fit 1 --reason "Requires active TS/SCI clearance." --dealbreaker clearance
+```
+
+Reviews are validated and bounded like `rank`'s (fit 1–5, reason ≤ 600 chars), stored per posting content, and re-attached on every later `search` until the posting changes. `jobsweep skill` (no `--install`) prints the skill so you can read what the agent will be told.
 
 ## With a model (optional)
 
@@ -265,13 +290,13 @@ Add `--rank` to have the model review only the new postings each morning. For an
 
 ```sh
 bun install
-bun test            # 152 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 158 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui
 ```
 
-Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts, bundled into the binary.
+Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
 
 CI typechecks and runs the suite on every push; tagging `v*` builds and attaches the five binaries to a GitHub Release.
 
