@@ -90,5 +90,6 @@ export async function init(): Promise<number> {
     for (const p of installSkill(skillDirs)) out(`  installed ${p}`)
   }
   out("Next: `jobsweep search`, then `jobsweep serve --open` for the dashboard — or just ask your agent to find jobs.")
+  out("Want it to run by itself? `jobsweep schedule --daily 06:40` (or `--every 6h`).")
   return 0
 }

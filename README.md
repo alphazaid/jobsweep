@@ -25,7 +25,7 @@ MATCHES (comp posted, sorted by ceiling)  * = new since last run  ° = carried f
 - [What it searches](#what-it-searches)
 - [How filtering works](#how-filtering-works)
 - [Profile and config](#profile-and-config)
-- [Daily digest](#daily-digest)
+- [Running it on a schedule](#running-it-on-a-schedule)
 - [Security and data handling](#security-and-data-handling)
 - [Develop](#develop)
 
@@ -59,7 +59,8 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | `jobsweep serve [-p 4747] [--open]` | Local dashboard server (see [Dashboard](#dashboard)). `-s` prints a console summary, `-j` the same as JSON, no server. |
 | `jobsweep export [--csv\|--json] [--out <file>]` | Every posting from the last search with comp, years, fit, AI review, your decision, URL (see [Export](#export)). |
 | `jobsweep ui [--open]` | Standalone one-file triage page (`~/.config/jobsweep/ui/jobs-<date>.html`) — works offline with marks in the browser's localStorage. The served `/triage` page is the same UI with marks kept server-side. |
-| `jobsweep digest [--top <n>] [--rank]` | Run the profile, write `digests/<date>.md` + `latest.json`, print the digest. For cron. |
+| `jobsweep digest [--top <n>] [--rank] [--notify]` | Run the profile, write `digests/<date>.md` + `latest.json`, print the digest; `--notify` posts a desktop notification. What `schedule` runs. |
+| `jobsweep schedule --every <30m\|6h\|1d> \| --daily HH:MM` | Run the digest on an OS timer (launchd / systemd user timer / Task Scheduler). `--status`, `--remove`. |
 | `jobsweep detail <id>` | Full posting JSON, e.g. `greenhouse:stripe:7532733`, `linkedin:4300011451`. |
 | `jobsweep companies [--verify]` | List company boards; `--verify` hits each one live (never touches the cache). |
 | `jobsweep companies discover` | Add every Greenhouse/Lever/Ashby board hiring in your cities, found via freehire. Agency/aggregator boards are skipped. |
@@ -271,15 +272,17 @@ Everything user-specific lives in one directory — `~/.config/jobsweep` (overri
 
 Unknown keys are rejected rather than silently ignored. `sources` omitted → company boards + freehire always, Adzuna only when both keys are present, LinkedIn never. `JOBSWEEP_DB` overrides the database path alone.
 
-## Daily digest
+## Running it on a schedule
 
-`jobsweep digest` runs the profile and writes `digests/<date>.md` + `latest.json`. Point cron/launchd at it:
-
+```sh
+jobsweep schedule --daily 06:40     # or --every 6h · --every 1d · --every 30m (15m minimum)
+jobsweep schedule --status
+jobsweep schedule --remove
 ```
-40 6 * * * /usr/local/bin/jobsweep digest > /dev/null 2>&1
-```
 
-Add `--rank` to have the model review only the new postings each morning. For an always-on dashboard, run `jobsweep serve` under launchd/systemd the same way.
+Uses what the OS already has — a launchd agent on macOS (`~/Library/LaunchAgents/com.jobsweep.digest.plist`), a systemd user timer on Linux (`~/.config/systemd/user/jobsweep-digest.timer`), Task Scheduler on Windows — so nothing of jobsweep's stays resident: the OS wakes the CLI, it runs `jobsweep digest --notify`, it exits. The launcher is written as an absolute path (schedulers run with almost no `PATH`). Each run writes `digests/<date>.md` + `latest.json`, records a row for the dashboard's history chart, and posts a desktop notification ("3 new postings · 349 open"; macOS and Linux with `notify-send`). Output goes to `~/.config/jobsweep/digests/schedule.log` (`journalctl --user -u jobsweep-digest` on Linux). Re-running `schedule` replaces the previous timer.
+
+Prefer your own cron? `jobsweep digest` is the command to point it at. Add `--rank` to have a configured model review only the new postings each run. For an always-on dashboard, run `jobsweep serve` under the same scheduler with a keep-alive, or just leave it in a terminal.
 
 ## Security and data handling
 
@@ -294,13 +297,13 @@ Add `--rank` to have the model review only the new postings each morning. For an
 
 ```sh
 bun install
-bun test            # 161 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 173 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui
 ```
 
-Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
+Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/schedule.ts` the OS timers; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
 
 CI typechecks and runs the suite on every push; tagging `v*` builds and attaches the five binaries to a GitHub Release.
 

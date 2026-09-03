@@ -153,9 +153,10 @@ describe("agent reviews survive the next search", () => {
 describe("jobsweep skill", () => {
   test("launcher: PATH binary, else the running source entry, else the running binary", () => {
     const noPath = { PATH: "/nonexistent" }
-    expect(resolveLauncher(noPath, ["bun", "/repo/src/cli.ts"], "/usr/bin/bun")).toBe("bun run /repo/src/cli.ts")
+    expect(resolveLauncher(noPath, ["bun", "/repo/src/cli.ts"], "/usr/bin/bun")).toBe("/usr/bin/bun run /repo/src/cli.ts")
     expect(resolveLauncher(noPath, ["/opt/jobsweep-0.1.0-darwin-arm64"], "/opt/jobsweep-0.1.0-darwin-arm64")).toBe("/opt/jobsweep-0.1.0-darwin-arm64")
-    expect(resolveLauncher(noPath, ["bun", "/Users/a b/My Repo/src/cli.ts"], "/usr/bin/bun")).toBe("bun run '/Users/a b/My Repo/src/cli.ts'")
+    expect(resolveLauncher(noPath, ["bun", "/Users/a b/My Repo/src/cli.ts"], "/usr/bin/bun")).toBe("/usr/bin/bun run '/Users/a b/My Repo/src/cli.ts'")
+    expect(renderSkill("/usr/local/bin/bun run /repo/src/cli.ts")).toContain("allowed-tools: Bash(bun:*)")
     expect(resolveLauncher(noPath, ["/Applications/it's here/jobsweep"], "/Applications/it's here/jobsweep")).toBe("'/Applications/it'\\''s here/jobsweep'")
     expect(renderSkill("bun run '/Users/a b/src/cli.ts'")).toContain("allowed-tools: Bash(bun:*)")
     expect(renderSkill("'/Applications/it'\\''s here/jobsweep'")).toContain("allowed-tools: Bash(jobsweep:*)")

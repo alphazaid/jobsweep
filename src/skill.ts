@@ -9,10 +9,27 @@ import { basename, join, resolve } from "node:path"
  * commands the skill hands to the agent work on this machine without further setup.
  */
 export function resolveLauncher(env = process.env, argv = process.argv, execPath = process.execPath): string {
-  if (Bun.which("jobsweep", { PATH: env.PATH }) !== null) return "jobsweep"
+  const parts = resolveLauncherArgv(env, argv, execPath)
+  return parts[0] === "jobsweep" && parts.length === 1 ? "jobsweep" : parts.map(shellQuote).join(" ")
+}
+
+/**
+ * The same launcher as an absolute argv, for schedulers that run with no PATH (launchd, systemd):
+ * the PATH `jobsweep` resolved to its file; a source checkout to `[<abs bun>, "run", <abs cli.ts>]`.
+ */
+export function resolveLauncherArgv(env = process.env, argv = process.argv, execPath = process.execPath): string[] {
+  const onPath = Bun.which("jobsweep", { PATH: env.PATH })
   const entry = argv[1]
-  if (entry && entry.endsWith(".ts")) return `bun run ${shellQuote(resolve(entry))}`
-  return basename(execPath).startsWith("jobsweep") ? shellQuote(resolve(execPath)) : "jobsweep"
+  if (entry && entry.endsWith(".ts") && !onPath) return [Bun.which("bun", { PATH: env.PATH }) ?? execPath, "run", resolve(entry)]
+  if (onPath) return ["jobsweep"]
+  return basename(execPath).startsWith("jobsweep") ? [resolve(execPath)] : ["jobsweep"]
+}
+
+/** Absolute form of the launcher for a scheduler: PATH `jobsweep` becomes its resolved file. */
+export function absoluteLauncherArgv(env = process.env, argv = process.argv, execPath = process.execPath): string[] {
+  const parts = resolveLauncherArgv(env, argv, execPath)
+  if (parts.length === 1 && parts[0] === "jobsweep") return [Bun.which("jobsweep", { PATH: env.PATH }) ?? "jobsweep"]
+  return parts
 }
 
 /** Paths go into shell code blocks the agent will run verbatim; anything beyond plain path characters is single-quoted. */
@@ -20,9 +37,25 @@ export function shellQuote(path: string): string {
   return /^[A-Za-z0-9_\/.:+@%-]+$/.test(path) ? path : `'${path.replace(/'/g, "'\\''")}'`
 }
 
+/** The first word of a POSIX shell command line, with single quotes (and the `'\''` escape) resolved. */
+export function firstShellWord(line: string): string {
+  let out = ""
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]!
+    if (c === "'") quoted = !quoted
+    else if (c === "\\" && !quoted && line[i + 1] === "'") {
+      out += "'"
+      i++
+    } else if (c === " " && !quoted) break
+    else out += c
+  }
+  return out
+}
+
 /** The skill with a concrete launcher filled in. `allowed-tools` wants the bare executable name. */
 export function renderSkill(launcher: string): string {
-  const tool = launcher.startsWith("bun ") ? "bun" : basename(launcher.replace(/^'|'$/g, ""))
+  const tool = basename(firstShellWord(launcher))
   return skillTemplate.replaceAll("{{JOBSWEEP}}", launcher).replaceAll("{{JOBSWEEP_TOOL}}", tool)
 }
 

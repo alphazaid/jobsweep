@@ -17,7 +17,8 @@ import { defaultSources, loadEnv, loadProfile, parseMoney, type Profile } from "
 import { PROVIDERS } from "./providers/index.ts"
 import type { ProviderCtx } from "./providers/provider.ts"
 import { attachReviews, rankJobs, sanitizeResult, saveReview, sortByAi } from "./rank.ts"
-import { installSkill, renderSkill, resolveLauncher } from "./skill.ts"
+import { absoluteLauncherArgv, installSkill, renderSkill, resolveLauncher } from "./skill.ts"
+import { describeCadence, install as installSchedule, notify, parseCadence, remove as removeSchedule, status as scheduleStatus } from "./schedule.ts"
 import { readLastSearch, startServer, statsOf, summaryText } from "./serve.ts"
 import { toCsv, toRows } from "./export.ts"
 import { run } from "./run.ts"
@@ -40,6 +41,10 @@ USAGE
   jobsweep serve -s | -j              The same numbers on the console (summary / JSON), no server.
   jobsweep export [--csv|--json] [--out <file>]
                                       Every posting from the last search with comp, years, fit, AI review, your decision, URL.
+  jobsweep schedule --every <30m|6h|1d> | --daily HH:MM
+                                      Run the digest on a timer via launchd (macOS), a systemd user timer (Linux), or
+                                      Task Scheduler (Windows); a desktop notification says how many postings are new.
+  jobsweep schedule --status | --remove
   jobsweep skill [--install] [--dir <path>]
                                       Print the agent skill (SKILL.md), or install it so your coding agent — Claude Code,
                                       Codex, Cursor, OMP, anything reading ~/.agents/skills — runs jobsweep when you ask
@@ -328,7 +333,7 @@ async function digest(argv: string[]): Promise<number> {
   const { values: v } = parseArgs({
     args: argv,
     strict: true,
-    options: { top: { type: "string", default: "15" }, format: { type: "string", short: "f", default: "md" }, rank: { type: "boolean", default: false }, profile: { type: "string" }, companies: { type: "string" } },
+    options: { top: { type: "string", default: "15" }, format: { type: "string", short: "f", default: "md" }, rank: { type: "boolean", default: false }, notify: { type: "boolean", default: false }, profile: { type: "string" }, companies: { type: "string" } },
   })
   const profile = await loadProfile(v.profile ?? PROFILE_PATH())
   if (!profile) fail("digest needs a profile: run `jobsweep init`", "NO_PROFILE")
@@ -364,6 +369,7 @@ async function digest(argv: string[]): Promise<number> {
   await Bun.write(join(DIGEST_DIR(), "latest.json"), JSON.stringify({ ...d, all: jobs }, null, 2) + "\n")
   await Bun.write(join(DIGEST_DIR(), "last-search.json"), JSON.stringify({ date, params: { cities: profile.cities, minTc: profile.minTc, maxYoe: profile.maxYoe, days: profile.days }, jobs, carriedIds: Object.keys(result.carriedIds), newIds: Object.keys(result.newIds) }))
   process.stdout.write((v.format === "json" ? JSON.stringify({ ...d, all: jobs }, null, 2) : md) + "\n")
+  if (v.notify) notify("jobsweep", fresh.length ? `${fresh.length} new posting${fresh.length === 1 ? "" : "s"} · ${jobs.length} open` : `nothing new · ${jobs.length} open`)
   return 0
 }
 
@@ -584,6 +590,34 @@ function skill(argv: string[]): number {
   return 0
 }
 
+function schedule(argv: string[]): number {
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { every: { type: "string" }, daily: { type: "string" }, status: { type: "boolean", default: false }, remove: { type: "boolean", default: false } } })
+  if (v.status) {
+    const st = scheduleStatus()
+    process.stdout.write(`${st.active ? "scheduled" : "not scheduled"} · ${st.detail}\n`)
+    return st.active ? 0 : 1
+  }
+  if (v.remove) {
+    process.stdout.write(`removed ${removeSchedule()}\n`)
+    return 0
+  }
+  if (v.every === undefined && v.daily === undefined) fail("say how often: --every 6h, --every 1d, or --daily 06:40 (or --status / --remove)", "BAD_ARG")
+  let cadence
+  try {
+    cadence = parseCadence(v.every, v.daily)
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e), "BAD_ARG")
+  }
+  const argv2 = [...absoluteLauncherArgv(), "digest", "--notify"]
+  try {
+    const r = installSchedule(argv2, cadence)
+    process.stdout.write(`scheduled ${describeCadence(cadence)}: ${argv2.join(" ")}\n  ${r.installed}\n  log: ${r.log}\n`)
+    return 0
+  } catch (e) {
+    fail(e instanceof Error ? e.message : String(e), "SCHEDULE_FAILED")
+  }
+}
+
 function cache(argv: string[]): number {
   const store = new Store()
   if (argv[0] === "clear") {
@@ -613,6 +647,7 @@ const job =
   : cmd === "export" ? exportCmd(rest)
   : cmd === "review" ? review(rest)
   : cmd === "skill" ? Promise.resolve(skill(rest))
+  : cmd === "schedule" ? Promise.resolve(schedule(rest))
   : cmd === "--version" || cmd === "-v" ? (process.stdout.write(`${pkg.version}\n`), Promise.resolve(0))
   : cmd === undefined || cmd === "--help" || cmd === "-h" ? (process.stdout.write(HELP), Promise.resolve(cmd ? 0 : 1))
   : fail(`unknown command "${cmd}"`, "BAD_CMD")
