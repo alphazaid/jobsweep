@@ -1,14 +1,17 @@
 import rankPrompt from "../prompts/rank.md" with { type: "text" }
-import type { FeedCache } from "./providers/provider.ts"
 import { completeJson, type Model } from "./llm.ts"
 import type { AiReview, Job } from "./types.ts"
+
+/** Durable review storage: separate from the feed cache, which is pruned by age and by `cache clear`. */
+export interface ReviewStore {
+  review(key: string): string | null
+  setReview(key: string, body: string): void
+}
 
 const BATCH = 8
 const DESC_CHARS = 3_500
 /** Bump when prompts/rank.md or the review schema changes so old cached reviews are re-done. */
 const PROMPT_VERSION = 2
-/** A cached review never expires on its own: the key already changes when the posting, candidate profile, model, or prompt changes. */
-const RANK_TTL_MS = 365 * 86_400_000
 
 /** Bounds on what a model reply may put into the cache and the page. */
 const REASON_CHARS = 600
@@ -69,15 +72,15 @@ function contentHash(j: Job): string {
  */
 const reviewKey = (j: Job) => `review:${j.id}:${contentHash(j)}`
 
-export function saveReview(j: Job, review: AiReview, cache: FeedCache): void {
-  cache.set(reviewKey(j), JSON.stringify(review))
+export function saveReview(j: Job, review: AiReview, store: ReviewStore): void {
+  store.setReview(reviewKey(j), JSON.stringify(review))
 }
 
 /** Jobs with a stored agent review get it back; jobs that already carry a review keep it. */
-export function attachReviews(jobs: Job[], cache: FeedCache): Job[] {
+export function attachReviews(jobs: Job[], store: ReviewStore): Job[] {
   return jobs.map((j) => {
     if (j.ai) return j
-    const hit = cache.get(reviewKey(j), RANK_TTL_MS)
+    const hit = store.review(reviewKey(j))
     return hit ? { ...j, ai: JSON.parse(hit) as AiReview } : j
   })
 }
@@ -85,7 +88,7 @@ export function attachReviews(jobs: Job[], cache: FeedCache): Job[] {
 export interface RankOptions {
   model: Model
   candidate: string
-  cache: FeedCache
+  cache: ReviewStore
   log: (m: string) => void
 }
 
@@ -100,7 +103,7 @@ export async function rankJobs(jobs: Job[], o: RankOptions): Promise<Job[]> {
   const out = new Map<string, AiReview>()
   const todo: Job[] = []
   for (const j of jobs) {
-    const hit = o.cache.get(key(j), RANK_TTL_MS)
+    const hit = o.cache.review(key(j))
     if (hit) out.set(j.id, JSON.parse(hit) as AiReview)
     else todo.push(j)
   }
@@ -118,7 +121,7 @@ export async function rankJobs(jobs: Job[], o: RankOptions): Promise<Job[]> {
       const j = r && byId.get(r.id)
       if (!r || !j) continue
       out.set(j.id, r.review)
-      o.cache.set(key(j), JSON.stringify(r.review))
+      o.cache.setReview(key(j), JSON.stringify(r.review))
     }
     const missing = batch.filter((b) => !out.has(b.id))
     if (missing.length) o.log(`rank: model skipped or malformed ${missing.length} posting(s) in this batch; they stay unscored`)

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { completeJson, configureModel, extractJson, ModelError, type Model } from "../src/llm.ts"
 import type { FeedCache } from "../src/providers/provider.ts"
-import { rankJobs, sortByAi } from "../src/rank.ts"
+import { rankJobs, sortByAi, type ReviewStore } from "../src/rank.ts"
 import type { Job } from "../src/types.ts"
 
 const realFetch = globalThis.fetch
@@ -106,10 +106,12 @@ describe("extractJson / completeJson", () => {
   })
 })
 
-class MemCache implements FeedCache {
+class MemCache implements FeedCache, ReviewStore {
   store: Record<string, string> = {}
   get(k: string) { return this.store[k] ?? null }
   set(k: string, v: string) { this.store[k] = v }
+  review(k: string) { return this.store[k] ?? null }
+  setReview(k: string, v: string) { this.store[k] = v }
 }
 
 function job(id: string, over: Partial<Job> = {}): Job {

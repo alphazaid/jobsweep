@@ -44,9 +44,13 @@ USAGE
                                       Print the agent skill (SKILL.md), or install it so your coding agent — Claude Code,
                                       Codex, Cursor, OMP, anything reading ~/.agents/skills — runs jobsweep when you ask
                                       it to find, rank, or export jobs. \`init\` offers this too.
+  jobsweep review --pending [--limit 12] [--new]
+                                      Next unreviewed postings (comp ceiling first) as JSON, trimmed for judging.
   jobsweep review [--model <name>]    Attach reviews written by the calling agent (no API key needed): JSON on stdin
                                       {"results":[{"id","fit":1-5,"reason","dealbreakers":[],"emphasize":[]}]} or one via
                                       --id --fit --reason. Same bounds as \`rank\`; shown in ui/serve/export/digest.
+  jobsweep review --clear <id>... | --clear-all
+                                      Retract reviews (agent or model) from the last search and the store.
 
 WITH A MODEL (optional — bring your own key; search/digest never call a model unless asked)
   jobsweep interview [--resume <file>] [--notes <file>]...
@@ -236,6 +240,8 @@ interface LastSearch {
   date: string
   params: { cities: string[]; minTc: number | null; maxYoe: number | null; days: number | null }
   jobs: Job[]
+  carriedIds?: string[]
+  newIds?: string[]
 }
 
 async function ui(argv: string[]): Promise<number> {
@@ -489,11 +495,47 @@ async function exportCmd(argv: string[]): Promise<number> {
   return 0
 }
 
+/** What an agent needs to judge a posting, and nothing more: keeps a batch of 12 well inside any context window. */
+const PENDING_DESC_CHARS = 2_500
+
 async function review(argv: string[]): Promise<number> {
-  const { values: v } = parseArgs({ args: argv, strict: true, options: { model: { type: "string", default: "agent" }, id: { type: "string" }, fit: { type: "string" }, reason: { type: "string" }, dealbreaker: { type: "string", multiple: true }, emphasize: { type: "string", multiple: true }, file: { type: "string" } } })
+  const { values: v } = parseArgs({ args: argv, strict: true, options: { model: { type: "string", default: "agent" }, id: { type: "string" }, fit: { type: "string" }, reason: { type: "string" }, dealbreaker: { type: "string", multiple: true }, emphasize: { type: "string", multiple: true }, file: { type: "string" }, pending: { type: "boolean", default: false }, limit: { type: "string", default: "12" }, new: { type: "boolean", default: false }, clear: { type: "string", multiple: true }, "clear-all": { type: "boolean", default: false } } })
   const lastPath = join(DIGEST_DIR(), "last-search.json")
   if (!existsSync(lastPath)) fail("no search yet — run `jobsweep search` first", "NO_SEARCH")
   const last = (await Bun.file(lastPath).json()) as LastSearch
+
+  if (v.pending) {
+    // Unreviewed postings, comp ceiling first (new-only with --new), trimmed to what a judgment needs.
+    const newIds = new Set(last.newIds ?? [])
+    const pending = last.jobs
+      .filter((j) => !j.ai && (!v.new || newIds.has(j.id)))
+      .sort((a, b) => (b.salary?.max ?? b.salary?.min ?? 0) - (a.salary?.max ?? a.salary?.min ?? 0))
+    const batch = pending.slice(0, int("limit", v.limit)).map((j) => ({
+      id: j.id, title: j.title, company: j.company, location: j.location, workMode: j.workMode, salary: j.salary, yoeMin: j.yoeMin, level: j.level, skillsMatched: j.fit?.matched ?? [], url: j.url,
+      description: (j.description ?? "").slice(0, PENDING_DESC_CHARS),
+    }))
+    process.stdout.write(JSON.stringify({ pending: pending.length, reviewed: last.jobs.length - pending.length - last.jobs.filter((j) => v.new && !newIds.has(j.id) && !j.ai).length, batch }, null, 2) + "\n")
+    return 0
+  }
+
+  if (v.clear?.length || v["clear-all"]) {
+    const ids = v["clear-all"] ? last.jobs.filter((j) => j.ai).map((j) => j.id) : v.clear!
+    const byId = new Map(last.jobs.map((j) => [j.id, j]))
+    const unknownIds = ids.filter((id) => !byId.has(id))
+    if (unknownIds.length) fail(`not in the last search: ${unknownIds.join(", ")}`, "UNKNOWN_ID")
+    const store = new Store()
+    let n = 0
+    for (const id of ids) {
+      byId.get(id)!.ai = null
+      store.clearReviews(id)
+      n++
+    }
+    store.close()
+    await Bun.write(lastPath, JSON.stringify(last))
+    process.stdout.write(`cleared reviews on ${n} posting(s)\n`)
+    return 0
+  }
+
   let items: unknown[]
   if (v.id) {
     if (!v.fit) fail("--fit 1-5 is required with --id", "BAD_ARG")

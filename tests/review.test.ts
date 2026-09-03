@@ -61,7 +61,80 @@ describe("jobsweep review", () => {
   })
 })
 
+describe("review --pending and --clear", () => {
+  test("pending lists unreviewed postings comp-first and trimmed; clear retracts from last-search and the store", () => {
+    const home = mkdtempSync(join(tmpdir(), "jobsweep-pending-"))
+    mkdirSync(join(home, "digests"))
+    const long = "x".repeat(5_000)
+    writeFileSync(join(home, "digests", "last-search.json"), JSON.stringify({ date: "2026-09-02", params: { cities: ["A"], minTc: null, maxYoe: null, days: null }, jobs: [
+      job("greenhouse:a:1", { salary: { min: 100_000, max: 150_000, raw: "", kind: "parsed" }, description: long }),
+      job("greenhouse:a:2", { salary: { min: 200_000, max: 250_000, raw: "", kind: "parsed" } }),
+      job("greenhouse:a:3", { ai: { fit: 3, reason: "done", dealbreakers: [], emphasize: [], model: "agent" } }),
+    ], carriedIds: [], newIds: ["greenhouse:a:1"] }))
+    const all = JSON.parse(cli(["review", "--pending"], home).out) as { pending: number; batch: Array<{ id: string; description: string }> }
+    expect(all.pending).toBe(2)
+    expect(all.batch.map((b) => b.id)).toEqual(["greenhouse:a:2", "greenhouse:a:1"])
+    expect(all.batch[1]!.description.length).toBe(2_500)
+    const fresh = JSON.parse(cli(["review", "--pending", "--new", "--limit", "1"], home).out) as { pending: number; batch: Array<{ id: string }> }
+    expect(fresh.pending).toBe(1)
+    expect(fresh.batch.map((b) => b.id)).toEqual(["greenhouse:a:1"])
+    expect(cli(["review", "--id", "greenhouse:a:2", "--fit", "4"], home).code).toBe(0)
+    // A wildcard or unknown id is rejected before anything is deleted; underscore/percent in a real id match literally.
+    expect(cli(["review", "--clear", "%"], home).err).toContain("UNKNOWN_ID")
+    const s0 = new Store(join(home, "jobsweep.db"))
+    s0.setReview("rank:greenhouse:a_2:h:p", "{}")
+    s0.setReview("review:greenhouse:a%2:h", "{}")
+    expect(s0.clearReviews("greenhouse:a:2")).toBe(1)
+    expect(s0.review("rank:greenhouse:a_2:h:p")).toBe("{}")
+    expect(s0.review("review:greenhouse:a%2:h")).toBe("{}")
+    s0.close()
+    expect(cli(["review", "--id", "greenhouse:a:2", "--fit", "4"], home).code).toBe(0)
+    expect(cli(["review", "--clear", "greenhouse:a:2", "--clear", "greenhouse:a:3"], home).out).toContain("cleared reviews on 2")
+    const last = JSON.parse(readFileSync(join(home, "digests", "last-search.json"), "utf8")) as { jobs: Job[] }
+    expect(last.jobs.map((j) => j.ai)).toEqual([null, null, null])
+    const store = new Store(join(home, "jobsweep.db"))
+    expect(attachReviews(last.jobs, store).map((j) => j.ai)).toEqual([null, null, null])
+    store.close()
+    rmSync(home, { recursive: true, force: true })
+  })
+})
+
 describe("agent reviews survive the next search", () => {
+  test("reviews outlive the feed cache: 15-day prune, cache clear, and a reopen all keep them", () => {
+    const dir = mkdtempSync(join(tmpdir(), "jobsweep-durable-"))
+    let clock = Date.parse("2026-09-02T12:00:00Z")
+    let store = new Store(join(dir, "t.db"), () => clock)
+    const j = job("linkedin:1", { description: "Go." })
+    saveReview(j, { fit: 4, reason: "good", dealbreakers: [], emphasize: [], model: "agent" }, store)
+    store.setReview("rank:linkedin:1:abc:profile", JSON.stringify({ fit: 2, reason: "model", dealbreakers: [], emphasize: [], model: "openai:x" }))
+    store.set("linkedin:detail:1", "cached feed")
+    store.clearCache()
+    store.close()
+    clock += 40 * 86_400_000
+    store = new Store(join(dir, "t.db"), () => clock)
+    expect(store.get("linkedin:detail:1", 365 * 86_400_000)).toBeNull()
+    expect(attachReviews([job("linkedin:1", { description: "Go." })], store)[0]!.ai?.fit).toBe(4)
+    expect(store.review("rank:linkedin:1:abc:profile")).toContain("model")
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test("reviews written into the old feeds cache are migrated into the reviews table", () => {
+    const dir = mkdtempSync(join(tmpdir(), "jobsweep-migrate-"))
+    const path = join(dir, "t.db")
+    const { Database } = require("bun:sqlite") as typeof import("bun:sqlite")
+    const raw = new Database(path)
+    raw.exec("CREATE TABLE feeds (key TEXT PRIMARY KEY, fetched_at INTEGER NOT NULL, body TEXT NOT NULL)")
+    raw.exec(`INSERT INTO feeds VALUES ('rank:linkedin:9:h:p', 1, '{"fit":5}'), ('review:linkedin:9:h', 1, '{"fit":3}'), ('linkedin:detail:9', 1, 'feed')`)
+    raw.close()
+    const store = new Store(path, () => 2)
+    expect(store.review("rank:linkedin:9:h:p")).toBe('{"fit":5}')
+    expect(store.review("review:linkedin:9:h")).toBe('{"fit":3}')
+    expect(store.get("rank:linkedin:9:h:p", 1e12)).toBeNull()
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   test("attachReviews restores a saved review while the posting is unchanged, not after its content changes", () => {
     const dir = mkdtempSync(join(tmpdir(), "jobsweep-attach-"))
     const store = new Store(join(dir, "t.db"))
@@ -82,6 +155,10 @@ describe("jobsweep skill", () => {
     const noPath = { PATH: "/nonexistent" }
     expect(resolveLauncher(noPath, ["bun", "/repo/src/cli.ts"], "/usr/bin/bun")).toBe("bun run /repo/src/cli.ts")
     expect(resolveLauncher(noPath, ["/opt/jobsweep-0.1.0-darwin-arm64"], "/opt/jobsweep-0.1.0-darwin-arm64")).toBe("/opt/jobsweep-0.1.0-darwin-arm64")
+    expect(resolveLauncher(noPath, ["bun", "/Users/a b/My Repo/src/cli.ts"], "/usr/bin/bun")).toBe("bun run '/Users/a b/My Repo/src/cli.ts'")
+    expect(resolveLauncher(noPath, ["/Applications/it's here/jobsweep"], "/Applications/it's here/jobsweep")).toBe("'/Applications/it'\\''s here/jobsweep'")
+    expect(renderSkill("bun run '/Users/a b/src/cli.ts'")).toContain("allowed-tools: Bash(bun:*)")
+    expect(renderSkill("'/Applications/it'\\''s here/jobsweep'")).toContain("allowed-tools: Bash(jobsweep:*)")
     const bin = mkdtempSync(join(tmpdir(), "jobsweep-bin-"))
     writeFileSync(join(bin, "jobsweep"), "#!/bin/sh\n", { mode: 0o755 })
     expect(resolveLauncher({ PATH: bin }, ["bun", "/repo/src/cli.ts"], "/usr/bin/bun")).toBe("jobsweep")

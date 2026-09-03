@@ -3,9 +3,10 @@ import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { DB_PATH } from "./paths.ts"
 import type { FeedCache } from "./providers/provider.ts"
+import type { ReviewStore } from "./rank.ts"
 import type { Decision, DecisionStatus, Job, RunSummary } from "./types.ts"
 
-export class Store implements FeedCache {
+export class Store implements FeedCache, ReviewStore {
   private db: Database
 
   /** `now` is injectable so tests can move the clock instead of sleeping. */
@@ -41,6 +42,11 @@ export class Store implements FeedCache {
         carried INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS runs_ts ON runs (ts);
+      CREATE TABLE IF NOT EXISTS reviews (
+        key TEXT PRIMARY KEY,
+        body TEXT NOT NULL,
+        written_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS decisions (
         job_id TEXT PRIMARY KEY,
         status TEXT NOT NULL,
@@ -51,6 +57,9 @@ export class Store implements FeedCache {
     if (runsCols.length && !runsCols.includes("id")) {
       this.db.exec("BEGIN; INSERT INTO runs (ts, cities, total, with_comp, new_count, carried) SELECT ts, cities, total, with_comp, new_count, carried FROM runs_v0 ORDER BY ts; DROP TABLE runs_v0; COMMIT;")
     }
+    // Reviews (model or agent) first lived in the feed cache, where the 15-day prune below and `cache clear` erased them.
+    // Move any survivors into their own table once.
+    this.db.exec("BEGIN; INSERT OR IGNORE INTO reviews (key, body, written_at) SELECT key, body, fetched_at FROM feeds WHERE key LIKE 'rank:%' OR key LIKE 'review:%'; DELETE FROM feeds WHERE key LIKE 'rank:%' OR key LIKE 'review:%'; COMMIT;")
     // Nothing reads a cache row older than the longest TTL (LinkedIn details, 14 d); drop them so the file stays small.
     this.db.query("DELETE FROM feeds WHERE fetched_at < ?").run(this.now() - 15 * 86_400_000)
     // Board rows from before title-gated caching used bare `source:slug` keys and held whole raw feeds (hundreds of MB).
@@ -62,6 +71,23 @@ export class Store implements FeedCache {
   /** Drop every cached feed/detail (postings and their seen-dates are kept) and reclaim the space. */
   clearCache(): void {
     this.db.exec("DELETE FROM feeds; VACUUM;")
+  }
+
+  /** Reviews never expire on their own: the key already encodes the posting content (and, for model reviews, profile + model + prompt). */
+  review(key: string): string | null {
+    return this.db.query<{ body: string }, [string]>("SELECT body FROM reviews WHERE key = ?").get(key)?.body ?? null
+  }
+
+  setReview(key: string, body: string): void {
+    this.db.query("INSERT OR REPLACE INTO reviews (key, body, written_at) VALUES (?, ?, ?)").run(key, body, this.now())
+  }
+
+  /** Remove every review of one posting, whatever its content hash or author. Literal prefix match: ids may contain `_` or `%`. */
+  clearReviews(jobId: string): number {
+    const rank = `rank:${jobId}:`, review = `review:${jobId}:`
+    return this.db
+      .query("DELETE FROM reviews WHERE substr(key, 1, ?) = ? OR substr(key, 1, ?) = ?")
+      .run(rank.length, rank, review.length, review).changes
   }
 
   /** One row per completed search, for the dashboard's history. Two runs in the same millisecond both survive. */

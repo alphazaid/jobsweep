@@ -11,13 +11,18 @@ import { basename, join, resolve } from "node:path"
 export function resolveLauncher(env = process.env, argv = process.argv, execPath = process.execPath): string {
   if (Bun.which("jobsweep", { PATH: env.PATH }) !== null) return "jobsweep"
   const entry = argv[1]
-  if (entry && entry.endsWith(".ts")) return `bun run ${resolve(entry)}`
-  return basename(execPath).startsWith("jobsweep") ? resolve(execPath) : "jobsweep"
+  if (entry && entry.endsWith(".ts")) return `bun run ${shellQuote(resolve(entry))}`
+  return basename(execPath).startsWith("jobsweep") ? shellQuote(resolve(execPath)) : "jobsweep"
+}
+
+/** Paths go into shell code blocks the agent will run verbatim; anything beyond plain path characters is single-quoted. */
+export function shellQuote(path: string): string {
+  return /^[A-Za-z0-9_\/.:+@%-]+$/.test(path) ? path : `'${path.replace(/'/g, "'\\''")}'`
 }
 
 /** The skill with a concrete launcher filled in. `allowed-tools` wants the bare executable name. */
 export function renderSkill(launcher: string): string {
-  const tool = launcher.startsWith("bun ") ? "bun" : basename(launcher)
+  const tool = launcher.startsWith("bun ") ? "bun" : basename(launcher.replace(/^'|'$/g, ""))
   return skillTemplate.replaceAll("{{JOBSWEEP}}", launcher).replaceAll("{{JOBSWEEP_TOOL}}", tool)
 }
 

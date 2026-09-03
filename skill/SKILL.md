@@ -42,7 +42,10 @@ Ranking means judging each surviving posting for *this* user. Two paths:
 
 **A model key is configured** (`{{JOBSWEEP}} serve -j` shows `reviewed > 0` after, or `~/.config/jobsweep/.env` has `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`): run `{{JOBSWEEP}} rank`, then read `{{JOBSWEEP}} export --json` — each row has `aiFit` 1–5, `aiReason`, `aiDealbreakers`.
 
-**No key — you are the model.** This is the normal case. Read the profile (`~/.config/jobsweep/profile.json`) and, if present, `~/.config/jobsweep/candidate.md`. Run the search, read each candidate posting's `description`, and judge it: is it genuinely worth this person's time, and why. Then hand your verdicts back so they persist on the dashboard, the triage page, and exports:
+**No key — you are the model.** This is the normal case. Read the profile (`~/.config/jobsweep/profile.json`) and, if present, `~/.config/jobsweep/candidate.md`. Then work in bounded batches — a search can hold 300+ open postings, and reading them all at once is neither possible nor useful:
+
+1. `{{JOBSWEEP}} review --pending --limit 12` → `{pending, reviewed, batch}`. `batch` is the next 12 unreviewed postings, comp ceiling first, each trimmed to what a judgment needs (`--new` restricts to postings new since the last run — the right default for "what came in today").
+2. Judge every posting in the batch and hand the verdicts back:
 
 ```sh
 {{JOBSWEEP}} review <<'EOF'
@@ -53,7 +56,9 @@ Ranking means judging each surviving posting for *this* user. Two paths:
 EOF
 ```
 
-Or one at a time: `{{JOBSWEEP}} review --id <id> --fit 4 --reason "…" --dealbreaker "…" --emphasize "…"`.
+3. Tell the user where you are (`reviewed 24 of 349 · 12 more?`) and continue only while they want more or until `pending` is 0. Default stopping point when they just said "rank them": the new postings, or the top ~36 by comp if nothing is new. Never claim a full ranking you didn't do — the dashboard shows exactly how many are reviewed.
+
+Or one at a time: `{{JOBSWEEP}} review --id <id> --fit 4 --reason "…" --dealbreaker "…" --emphasize "…"`. Retract with `{{JOBSWEEP}} review --clear <id>` (or `--clear-all`).
 
 Rules for a review: `fit` 1 skip · 2 unlikely · 3 maybe · 4 apply · 5 apply today. `reason` is one or two sentences quoting the requirement that decided it. A `dealbreaker` is a hard requirement the user can't meet (clearance, citizenship, on-site in the wrong city, years far above theirs). `emphasize` is what in their background to lead with. Review every posting you were asked about — a posting you skip stays unscored, which is worse than an honest 2.
 

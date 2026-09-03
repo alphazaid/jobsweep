@@ -31,11 +31,13 @@ MATCHES (comp posted, sorted by ceiling)  * = new since last run  ° = carried f
 
 ## Install
 
-Prebuilt binaries for macOS (arm64/x64), Linux (arm64/x64), and Windows (x64) are on the [Releases](../../releases) page — no runtime needed. Or with [Bun](https://bun.sh):
+Either way, the goal is a `jobsweep` on your PATH — the skill and every example below assume it.
 
 ```sh
-bunx jobsweep init
+bun install -g jobsweep        # with Bun (https://bun.sh); puts `jobsweep` on PATH
 ```
+
+Or download a prebuilt binary for macOS (arm64/x64), Linux (arm64/x64), or Windows (x64) from the [Releases](../../releases) page — no runtime needed — and put it somewhere on your PATH as `jobsweep`. (`bunx jobsweep init` works for a one-off try, but it doesn't leave a `jobsweep` behind; the installed skill then embeds the full path of whatever ran, which is fine on this machine but not the intent.)
 
 ## Quickstart
 
@@ -63,7 +65,9 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | `jobsweep companies discover` | Add every Greenhouse/Lever/Ashby board hiring in your cities, found via freehire. Agency/aggregator boards are skipped. |
 | `jobsweep cache [clear]` | Show cache size, or drop cached feeds (postings and their seen-dates are kept). |
 | `jobsweep skill [--install] [--dir <path>]` | Print the agent skill, or install it into `~/.agents/skills` (+ `~/.claude/skills`) with this machine's launcher filled in. |
+| `jobsweep review --pending [--limit 12] [--new]` | Next unreviewed postings as JSON, trimmed for judging — the agent's batch loop. |
 | `jobsweep review [--model <name>]` | Attach reviews written by the calling agent — JSON on stdin or `--id --fit --reason`. No key needed. |
+| `jobsweep review --clear <id>… \| --clear-all` | Retract reviews (agent or model). |
 | `jobsweep interview [--resume <file>] [--notes <file>]…` | Model: build `candidate.md` from your resume/notes with your confirmation at each step. |
 | `jobsweep rank` | Model: score the last search's survivors 1–5 against `candidate.md`, with reasons. Cached. |
 
@@ -167,11 +171,11 @@ The intended way to use jobsweep day to day: set it up once, then just ask your 
 jobsweep skill --install      # init offers this too
 ```
 
-That writes an [Agent Skill](https://agentskills.io) to `~/.agents/skills/jobsweep/SKILL.md` (the cross-client location — Codex, Cursor, OMP, and others read it) and `~/.claude/skills/jobsweep/SKILL.md` (Claude Code), with the launcher for *this* machine filled in: `jobsweep` if it's on your PATH, else the absolute path of the binary or `bun run …/src/cli.ts`. Then, in any of those agents:
+That writes an [Agent Skill](https://agentskills.io) — a `SKILL.md` in the format every skills-aware agent reads — to `~/.agents/skills/jobsweep/` (the cross-client convention the spec's integration guide recommends; Claude Code, Codex, Cursor, OMP and others scan it) and, if `~/.claude` exists, `~/.claude/skills/jobsweep/` (Claude Code's own location). Your agent keeps skills somewhere else? `jobsweep skill --install --dir <that-skills-root>`. The launcher for *this* machine is filled in: `jobsweep` if it's on your PATH, else the shell-quoted absolute path of the binary or `bun run …/src/cli.ts`. Then, in any of those agents:
 
 > find me jobs · what's new · jobs in Austin paying 180k+ · which of these should I apply to · rank them · open the dashboard · export the list
 
-…and the agent runs the CLI, reads the JSON, and answers from it. **Ranking needs no API key**: the agent you're already talking to *is* the model. The skill tells it to read each posting and hand its verdicts back with `jobsweep review`, so they land on the dashboard, the triage page, and exports exactly as a configured model's would:
+…and the agent runs the CLI, reads the JSON, and answers from it. **Ranking needs no API key**: the agent you're already talking to *is* the model. The skill has it work in bounded batches — `jobsweep review --pending --limit 12` hands it the next twelve unreviewed postings (comp ceiling first, `--new` for today's only, descriptions trimmed), it judges them, and hands verdicts back with `jobsweep review` — reporting progress (`reviewed 24 of 349`) rather than pretending to have read all 349. Verdicts land on the dashboard, the triage page, and exports exactly as a configured model's would:
 
 ```sh
 jobsweep review <<'EOF'
@@ -180,7 +184,7 @@ EOF
 jobsweep review --id linkedin:4455 --fit 1 --reason "Requires active TS/SCI clearance." --dealbreaker clearance
 ```
 
-Reviews are validated and bounded like `rank`'s (fit 1–5, reason ≤ 600 chars), stored per posting content, and re-attached on every later `search` until the posting changes. `jobsweep skill` (no `--install`) prints the skill so you can read what the agent will be told.
+Reviews are validated and bounded like `rank`'s (fit 1–5, reason ≤ 600 chars), stored in their own SQLite table (never touched by cache pruning or `cache clear`), and re-attached on every later `search` until the posting's content changes. Retract with `jobsweep review --clear <id>` or `--clear-all`. `jobsweep skill` (no `--install`) prints the skill so you can read what the agent will be told.
 
 ## With a model (optional)
 
@@ -241,7 +245,7 @@ Everything user-specific lives in one directory — `~/.config/jobsweep` (overri
 | `metros.json` | your own metro aliases, merged over the built-in table |
 | `candidate.md` | the interview's output; what `rank` scores against |
 | `.env` | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `FREEHIRE_API_URL` (mode 600) |
-| `jobsweep.db` | SQLite: seen postings, feed cache, run history, decisions, rank cache |
+| `jobsweep.db` | SQLite: seen postings, feed cache, run history, decisions, reviews (model and agent; never pruned) |
 | `digests/` | `<date>.md`, `latest.json`, `last-search.json` (what `serve`/`ui`/`export` read) |
 | `ui/` | standalone triage pages from `jobsweep ui` |
 
@@ -290,7 +294,7 @@ Add `--rank` to have the model review only the new postings each morning. For an
 
 ```sh
 bun install
-bun test            # 158 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 161 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui
