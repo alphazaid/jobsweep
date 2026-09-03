@@ -13,6 +13,10 @@ allowed-tools: Bash({{JOBSWEEP_TOOL}}:*) Bash(jq:*) Read
 
 The user has set up jobsweep (`~/.config/jobsweep/profile.json` holds their cities, comp floor, years, skills). The CLI is invoked as `{{JOBSWEEP}}` — use exactly that launcher. Your job is to **run the tool and read what it returns** — never describe what it would do, never invent postings. Every number you state comes from a command you ran this turn.
 
+## Not set up yet?
+
+If `{{JOBSWEEP}} doctor` exits 1 (no profile), stop and follow the setup procedure: `{{JOBSWEEP}} setup-guide` prints it. It has you ask the user for cities, comp floor, and years, then run `{{JOBSWEEP}} init --cities … --min-tc … --max-yoe …`, `companies discover`, a first `search`, and `doctor` again. Don't guess a profile on the user's behalf.
+
 ## Commands
 
 | Ask | Run |

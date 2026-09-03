@@ -7,7 +7,7 @@
   "bin": {
     "jobsweep": "./src/cli.ts"
   },
-  "files": ["src", "presets", "prompts", "skill", "companies.seed.json", "README.md", "LICENSE"],
+  "files": ["src", "presets", "prompts", "skill", "SETUP.md", "companies.seed.json", "README.md", "LICENSE"],
   "engines": {
     "bun": ">=1.1"
   },

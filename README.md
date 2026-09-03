@@ -41,6 +41,13 @@ Or download a prebuilt binary for macOS (arm64/x64), Linux (arm64/x64), or Windo
 
 ## Quickstart
 
+Two ways in — same result:
+
+- **Yourself:** `jobsweep init` asks eight questions and writes your profile.
+- **Hand it to your AI agent:** paste *"Set up jobsweep by following https://github.com/alphazaid/jobsweep/blob/main/SETUP.md"* into Claude Code, Codex, Cursor, OMP, or any agent with a shell. [SETUP.md](SETUP.md) is written for it: it asks you for your cities, comp floor, and years, runs the unattended `jobsweep init --cities … --min-tc … --max-yoe …`, discovers boards, runs the first search, installs the skill, and proves each step with `jobsweep doctor`. (Also available offline as `jobsweep setup-guide`.)
+
+### By hand
+
 ```sh
 jobsweep init                 # cities, comp floor, years, skills, sources, Adzuna key → ~/.config/jobsweep
 jobsweep companies discover   # add every Greenhouse/Lever/Ashby board hiring in your cities (2–3 min, once)
@@ -55,6 +62,9 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | Command | What it does |
 |---|---|
 | `jobsweep init` | Interactive setup: cities, comp floor, years, skills, sources, Adzuna key, LinkedIn opt-in. Writes `profile.json`, `companies.json`, `.env`. |
+| `jobsweep init --cities "…" [--min-tc 200k] [--max-yoe 3] [--skills "…"] [--linkedin] [--no-skill] [--json]` | The same setup with no prompts, for scripts and agents. Adzuna keys are read from `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` in the environment, never flags. |
+| `jobsweep doctor [--json]` | Check the setup: profile, boards, keys, skill, last search, schedule. Exit 1 if anything required is missing; each failing line names its fix. |
+| `jobsweep setup-guide` | Print SETUP.md — the agent-followable setup procedure. |
 | `jobsweep search [flags]` | The sweep. Flags override the profile; with a profile, no flags needed. Writes `digests/last-search.json` and records a run. |
 | `jobsweep serve [-p 4747] [--open]` | Local dashboard server (see [Dashboard](#dashboard)). `-s` prints a console summary, `-j` the same as JSON, no server. |
 | `jobsweep export [--csv\|--json] [--out <file>]` | Every posting from the last search with comp, years, fit, AI review, your decision, URL (see [Export](#export)). |
@@ -297,13 +307,13 @@ Prefer your own cron? `jobsweep digest` is the command to point it at. Add `--ra
 
 ```sh
 bun install
-bun test            # 173 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 182 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui
 ```
 
-Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/schedule.ts` the OS timers; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
+Layout: `src/providers/*` one file per source behind a common `Provider` interface (`search`, `detail`, `revalidate`); `src/filters.ts` city/comp/years/dedupe; `src/text.ts` the parsers; `src/run.ts` the sweep + carry-forward; `src/db.ts` the store; `src/serve.ts` + `src/dashboard.ts` + `src/ui.ts` the pages; `src/export.ts`; `src/schedule.ts` the OS timers; `src/init.ts` (one `writeSetup` core behind the prompts and the flags) + `src/doctor.ts`; `src/llm.ts` + `src/interview.ts` + `src/rank.ts` the model layer; `presets/swe.json` the title gate and default queries; `prompts/*.md` the prompts and `skill/SKILL.md` the agent skill, both bundled into the binary.
 
 CI typechecks and runs the suite on every push; tagging `v*` builds and attaches the five binaries to a GitHub Release.
 
