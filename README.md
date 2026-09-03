@@ -62,7 +62,7 @@ Run `jobsweep search` again tomorrow: new postings are starred, everything you'v
 | Command | What it does |
 |---|---|
 | `jobsweep init` | Interactive setup: cities, comp floor, years, skills, sources, Adzuna key, LinkedIn opt-in. Writes `profile.json`, `companies.json`, `.env`. |
-| `jobsweep init --cities "…" [--min-tc 200k] [--max-yoe 3] [--skills "…"] [--linkedin] [--no-skill] [--json]` | The same setup with no prompts, for scripts and agents. Adzuna keys are read from `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` in the environment, never flags. |
+| `jobsweep init --cities "…" [--min-tc 200k] [--max-yoe 3] [--skills "…"] [--linkedin] [--no-skill] [--json] [--dry-run]` | The same setup with no prompts, for scripts and agents. `--dry-run` previews the profile without writing. Adzuna keys are read from `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` in the environment, never flags. |
 | `jobsweep doctor [--json]` | Check the setup: profile, boards, keys, skill, last search, schedule. Exit 1 if anything required is missing; each failing line names its fix. |
 | `jobsweep setup-guide` | Print SETUP.md — the agent-followable setup procedure. |
 | `jobsweep search [flags]` | The sweep. Flags override the profile; with a profile, no flags needed. Writes `digests/last-search.json` and records a run. |
@@ -307,7 +307,7 @@ Prefer your own cron? `jobsweep digest` is the command to point it at. Add `--ra
 
 ```sh
 bun install
-bun test            # 182 tests, all offline (a scripted local model server stands in for the real one)
+bun test            # 183 tests, all offline (a scripted local model server stands in for the real one)
 bun run typecheck
 bun run build       # dist/ binaries for mac/linux/windows
 bun run smoke       # drives the compiled binary end-to-end: PDF resume → interview → rank → ui

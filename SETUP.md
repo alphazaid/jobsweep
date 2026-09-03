@@ -42,7 +42,7 @@ Optional, mention only if relevant: skills to score against (`--skills "Go,TypeS
 jobsweep init --cities "New York, NY" --min-tc 200k --max-yoe 3 --skills "TypeScript,Go,AWS" --json
 ```
 
-This writes `profile.json` and a seed `companies.json` under `~/.config/jobsweep`, and installs the agent skill (step 6) unless `--no-skill`. `--json` prints the paths written (never secrets). Re-running with fewer flags keeps existing values.
+Preview first with `--dry-run`: it validates the flags and prints the exact profile it would write (and which files) without touching anything — show that to the user and get a yes before running it for real. Then the same command without `--dry-run` writes `profile.json` and a seed `companies.json` under `~/.config/jobsweep`, and installs the agent skill (step 6) unless `--no-skill`. `--json` prints the paths written (never secrets). Re-running with fewer flags keeps existing values.
 
 **Adzuna** (optional, free official API — https://developer.adzuna.com). If the user has an app id and key, write them to the secrets file yourself, then run `init` (it reads them from the environment or that file and enables the source):
 

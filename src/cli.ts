@@ -32,10 +32,11 @@ const HELP = `jobsweep ${pkg.version} — sweep company boards, Adzuna, freehire
 USAGE
   jobsweep init                       Set up your profile interactively (cities, comp floor, years, skills, sources).
   jobsweep init --cities "New York, NY;Austin, TX" [--min-tc 200k] [--max-yoe 3] [--days 14]
-               [--remote include|only|exclude] [--skills "Go,TypeScript"] [--linkedin] [--skill|--no-skill] [--json]
+               [--remote include|only|exclude] [--skills "Go,TypeScript"] [--linkedin] [--skill|--no-skill] [--json] [--dry-run]
                                       The same setup without prompts — for scripts and agents (see SETUP.md). Omitted
                                       flags keep existing values or defaults. Adzuna keys are read from the environment
-                                      (ADZUNA_APP_ID / ADZUNA_APP_KEY), never from flags. --json prints the paths written.
+                                      (ADZUNA_APP_ID / ADZUNA_APP_KEY), never from flags. --json prints the paths written;
+                                      --dry-run validates and shows the profile it would write, touching nothing.
   jobsweep doctor [--json]            Check the setup: profile, boards, keys, skill, last search, schedule. Exit 1 if
                                       anything required is missing; each failing line names its fix.
   jobsweep setup-guide                Print SETUP.md: the step-by-step an agent (or you) follows to set this machine up.
@@ -609,7 +610,7 @@ function initFlags(argv: string[]): number {
     options: {
       cities: { type: "string" }, "min-tc": { type: "string" }, "max-yoe": { type: "string" }, days: { type: "string" }, remote: { type: "string" }, skills: { type: "string" },
       linkedin: { type: "boolean" }, "no-linkedin": { type: "boolean", default: false },
-      skill: { type: "boolean" }, "no-skill": { type: "boolean", default: false }, json: { type: "boolean", default: false },
+      skill: { type: "boolean" }, "no-skill": { type: "boolean", default: false }, json: { type: "boolean", default: false }, "dry-run": { type: "boolean", default: false },
     },
   })
   const existing = readExistingProfile()
@@ -631,7 +632,7 @@ function initFlags(argv: string[]): number {
       adzunaId: process.env.ADZUNA_APP_ID ?? env.ADZUNA_APP_ID ?? "",
       adzunaKey: process.env.ADZUNA_APP_KEY ?? env.ADZUNA_APP_KEY ?? "",
       installSkill: v["no-skill"] ? false : (v.skill ?? true),
-    })
+    }, v["dry-run"])
     if (v.json) process.stdout.write(JSON.stringify(r, null, 2) + "\n")
     else report(r)
     return 0

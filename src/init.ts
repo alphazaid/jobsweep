@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 import companiesSeed from "../companies.seed.json"
 import { knownMetro } from "./filters.ts"
+import { join } from "node:path"
 import { COMPANIES_PATH, ENV_PATH, PROFILE_PATH, configDir } from "./paths.ts"
 import { LINKEDIN_NOTICE, parseMoney } from "./profile.ts"
 import { defaultSkillDirs, installSkill } from "./skill.ts"
@@ -40,6 +41,10 @@ export interface SetupResult {
   seeded: number
   skillPaths: string[]
   notes: string[]
+  /** The profile as it was (or would be) written. Never contains secrets. */
+  profile: Record<string, unknown>
+  /** True when nothing was written (`--dry-run`). */
+  dryRun: boolean
 }
 
 export function readExistingProfile(): Record<string, unknown> {
@@ -59,8 +64,11 @@ export function readEnv(): Record<string, string> {
   return env
 }
 
-/** Validate and write profile.json, .env, companies.json, and the agent skill. Throws on bad input; writes nothing then. */
-export function writeSetup(a: SetupAnswers): SetupResult {
+/**
+ * Validate and write profile.json, the secrets file, companies.json, and the agent skill. Throws on bad input; writes
+ * nothing then. With `dryRun`, validates and reports exactly what would be written, touching nothing.
+ */
+export function writeSetup(a: SetupAnswers, dryRun = false): SetupResult {
   const notes: string[] = []
   if (!a.cities.length) throw new Error("at least one city is required (e.g. \"New York, NY\")")
   for (const c of a.cities) if (!knownMetro(c)) notes.push(`no suburb aliases for "${c}" yet — only exact city text matches; add some to ${configDir()}/metros.json (see README)`)
@@ -87,20 +95,22 @@ export function writeSetup(a: SetupAnswers): SetupResult {
     linkedinAccepted: a.linkedin,
   }
   const profilePath = PROFILE_PATH()
-  writeFileSync(profilePath, JSON.stringify(profile, null, 2) + "\n")
+  const envPath = adzuna ? ENV_PATH() : null
+  const companiesPath = COMPANIES_PATH()
+  const skillDirs = a.installSkill ? defaultSkillDirs() : []
+  if (dryRun) {
+    return { profilePath, envPath, companiesPath, seeded: companiesSeed.length, skillPaths: skillDirs.map((d) => join(d, "jobsweep", "SKILL.md")), notes, profile, dryRun: true }
+  }
 
-  let envPath: string | null = null
-  if (adzuna) {
-    envPath = ENV_PATH()
+  writeFileSync(profilePath, JSON.stringify(profile, null, 2) + "\n")
+  if (envPath) {
     const env = { ...readEnv(), ADZUNA_APP_ID: a.adzunaId, ADZUNA_APP_KEY: a.adzunaKey }
     writeFileSync(envPath, Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n") + "\n")
     chmodSync(envPath, 0o600)
   }
-
-  const companiesPath = COMPANIES_PATH()
   if (!existsSync(companiesPath)) writeFileSync(companiesPath, JSON.stringify(companiesSeed, null, 2) + "\n")
-  const skillPaths = a.installSkill ? installSkill(defaultSkillDirs()) : []
-  return { profilePath, envPath, companiesPath, seeded: companiesSeed.length, skillPaths, notes }
+  const skillPaths = skillDirs.length ? installSkill(skillDirs) : []
+  return { profilePath, envPath, companiesPath, seeded: companiesSeed.length, skillPaths, notes, profile, dryRun: false }
 }
 
 /** Interactive setup. Re-runnable: existing values become the defaults. Never touches the repo. */
@@ -147,6 +157,11 @@ export async function init(): Promise<number> {
 
 export function report(r: SetupResult): void {
   for (const n of r.notes) out(`  note: ${n}`)
+  if (r.dryRun) {
+    out(`Dry run — nothing written. Would write ${r.profilePath}${r.envPath ? ` and ${r.envPath} (Adzuna keys from the environment)` : ""}${r.skillPaths.length ? `, and the skill to ${r.skillPaths.join(", ")}` : ""}:`)
+    out(JSON.stringify(r.profile, null, 2))
+    return
+  }
   out(`\nWrote ${r.profilePath}${r.envPath ? ` and ${r.envPath}` : ""}.`)
   out(`Company boards: ${r.companiesPath} (${r.seeded} seeded). Run \`jobsweep companies discover\` to add every board hiring in your cities — takes a couple of minutes.`)
   for (const p of r.skillPaths) out(`  installed ${p}`)

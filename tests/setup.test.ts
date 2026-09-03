@@ -42,6 +42,22 @@ describe("init --flags (unattended)", () => {
     // No flag exists for the key: passing one is rejected, so it can never land in shell history by our doing.
     expect(cli(["init", "--adzuna-key", "x"]).code).toBe(1)
   })
+  test("--dry-run validates and previews the profile, writes nothing, never shows secrets", () => {
+    const r = cli(["init", "--cities", "Austin, TX", "--min-tc", "180k", "--dry-run", "--json"], { ADZUNA_APP_ID: "id1", ADZUNA_APP_KEY: "sekrit" })
+    expect(r.code).toBe(0)
+    const j = JSON.parse(r.out) as { dryRun: boolean; profile: Record<string, unknown>; envPath: string | null; skillPaths: string[] }
+    expect(j.dryRun).toBe(true)
+    expect(j.profile).toMatchObject({ cities: ["Austin, TX"], minTc: 180000, sources: ["greenhouse", "lever", "ashby", "adzuna", "freehire"] })
+    expect(j.envPath).toBe(join(home, SECRETS_FILE))
+    expect(j.skillPaths.length).toBeGreaterThan(0)
+    expect(r.out).not.toContain("sekrit")
+    expect(existsSync(join(home, "profile.json"))).toBe(false)
+    expect(existsSync(join(home, SECRETS_FILE))).toBe(false)
+    expect(existsSync(join(home, "companies.json"))).toBe(false)
+    // Human-readable form says so too, and still validates.
+    expect(cli(["init", "--cities", "Austin, TX", "--dry-run", "--no-skill"]).out).toContain("Dry run — nothing written")
+    expect(cli(["init", "--cities", "Austin, TX", "--min-tc", "lots", "--dry-run"]).err).toContain("isn't a number")
+  })
   test("first run without --cities fails; bad values fail before anything is written", () => {
     expect(cli(["init", "--min-tc", "1k"]).err).toContain("NO_CITY")
     expect(cli(["init", "--cities", "X", "--min-tc", "lots"]).err).toContain("isn't a number")
