@@ -72,6 +72,256 @@ describe("matchedLocation", () => {
     expect(matchedLocation(job({ location: "New York, NY" }), p)).toBeNull()
     expect(matchedLocation(job({ location: "Remote" }), p)).toBe("Remote")
   })
+
+  test("a remote flag does not make a foreign location US-eligible", () => {
+    for (const [id, location] of [
+      ["hong-kong", "Hong Kong"],
+      ["foreign-city", "Ulaanbaatar"],
+      ["foreign-remote", "Remote - Mongolia"],
+    ]) {
+      expect(matchedLocation(job({ id: `location:${id}`, location, workMode: "remote" }), base)).toBeNull()
+    }
+  })
+
+  test("candidate residency requirements override remote and NYC metadata", () => {
+    const description = "This role is remote, but candidates must be based in Hong Kong. We are hiring specifically for this market, so applicants should already be based in Hong Kong."
+    for (const [id, location] of [["remote", "Remote - United States"], ["city", "New York, NY"]]) {
+      const j = job({ id: `residency:${id}`, location, locations: [location!], workMode: "remote", description })
+      expect(matchedLocation(j, base)).toBeNull()
+      expect(matchedLocation(j, { ...base, remote: "only" })).toBeNull()
+    }
+  })
+
+  test("state hiring exclusions override US remote eligibility and salary geography", () => {
+    const exclusions = [
+      "This role is remote in the USA, but candidates are not eligible to be hired in CA, NY, WA, PA, CT.",
+      "This role is remote in the United States. We cannot hire candidates residing in New York.",
+    ]
+    for (const [index, restriction] of exclusions.entries()) {
+      const j = job({
+        id: `state-exclusion:${index}`,
+        location: "Remote - United States",
+        workMode: "remote",
+        description: `${restriction}\nCompensation for New York City applicants: $180,000 - $220,000.`,
+      })
+      expect(matchedLocation(j, base)).toBeNull()
+    }
+  })
+
+  test("required out-of-metro attendance overrides a remote label", () => {
+    const postings: Partial<Job>[] = [
+      {
+        id: "attendance:clera",
+        location: "Los Angeles, CA",
+        description: "On-site in *Los Angeles, CA, United States*.",
+      },
+      {
+        id: "attendance:medical-mutual",
+        location: "Cleveland, OH",
+        description: "This is a hybrid‑remote role based out of the Brooklyn, OH office, with the expectation to work onsite on designated in‑office days each week.",
+      },
+      {
+        id: "attendance:mislabelled-nyc",
+        location: "New York, NY",
+        description: "This role requires working onsite at our San Francisco, CA office three days per week.",
+      },
+    ]
+    for (const posting of postings) {
+      const j = job({ ...posting, workMode: "remote" })
+      expect(matchedLocation(j, base)).toBeNull()
+      expect(matchedLocation(j, { ...base, remote: "only" })).toBeNull()
+    }
+  })
+
+  test("city matches respect word boundaries and conflicting jurisdictions", () => {
+    expect(matchedLocation(job({ id: "boundary:brooklyn-oh", location: "Brooklyn, OH" }), base)).toBeNull()
+    expect(matchedLocation(job({ id: "boundary:austinville", location: "Austinville, VA" }), { ...base, city: "Austin, TX" })).toBeNull()
+    expect(matchedLocation(job({ id: "boundary:london-ontario", location: "London, Ontario, Canada" }), { ...base, city: "London, UK" })).toBeNull()
+  })
+
+  test("non-US local searches retain their own city", () => {
+    expect(matchedLocation(job({ id: "local:london", location: "London, UK" }), { ...base, city: "London, UK" })).toBe("London, UK")
+  })
+
+  test("NYC metro and NYC alternatives remain available without remote eligibility", () => {
+    for (const [id, location] of [["jersey-city", "Jersey City, NJ"], ["hoboken", "Hoboken, NJ"]]) {
+      expect(matchedLocation(job({ id: `metro:${id}`, location }), { ...base, remote: "exclude" })).toBe(location!)
+    }
+    const j = job({
+      id: "metro:onsite-alternatives",
+      location: "San Francisco, CA",
+      locations: ["San Francisco, CA", "New York, NY"],
+      workMode: "onsite",
+      description: "This role is onsite in either San Francisco, CA or New York, NY.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "exclude" })).toBe("New York, NY")
+  })
+
+  test("US, worldwide, and unrestricted remote remain eligible in remote-only searches", () => {
+    for (const [id, location] of [
+      ["us", "Remote - United States"],
+      ["worldwide", "Remote - Worldwide"],
+      ["global-label", "Remote, Global"],
+      ["dotted-us", "Remote U.S."],
+      ["unrestricted", "Remote"],
+    ]) {
+      const j = job({ id: `eligible:${id}`, location, workMode: "remote" })
+      expect(matchedLocation(j, base)).toBe(location!)
+      expect(matchedLocation(j, { ...base, remote: "only" })).toBe(location!)
+      expect(matchedLocation(j, { ...base, remote: "exclude" })).toBeNull()
+    }
+  })
+
+  test("a foreign remote alternative does not veto an eligible US option", () => {
+    const j = job({
+      id: "eligible:multi-region",
+      location: "Remote - Canada",
+      locations: ["Remote - Canada", "Remote - United States"],
+      workMode: "remote",
+      description: "Candidates must be based in the United States or Canada.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe("Remote - United States")
+    const combined = job({
+      id: "eligible:combined-regions",
+      location: "United States / Canada",
+      workMode: "remote",
+      description: "Candidates must be based in the United States or Canada. Occasional travel to field sites may be required.",
+    })
+    expect(matchedLocation(combined, { ...base, remote: "only" })).toBe("United States / Canada")
+  })
+
+  test("headquarters, salary geography, and optional travel are not residence requirements", () => {
+    const j = job({
+      id: "eligible:incidental-geography",
+      location: "Remote - United States",
+      workMode: "remote",
+      description: "We are headquartered in London, UK. This role is fully remote anywhere in the United States. Optional travel to our Hong Kong office is available. California compensation range: $180,000 - $220,000.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe("Remote - United States")
+  })
+
+  test("negated outside-metro office requirements do not exclude US remote roles", () => {
+    const j = job({
+      id: "eligible:negated-attendance",
+      location: "Remote - United States",
+      workMode: "remote",
+      description: "You are not required to work onsite at our San Francisco office. Candidates can work remotely from anywhere in the United States.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe("Remote - United States")
+  })
+
+  test("required NYC hybrid attendance remains local rather than fully remote", () => {
+    const j = job({
+      id: "metro:hybrid",
+      location: "New York, NY",
+      workMode: "hybrid",
+      description: "We have a hybrid work culture that combines regular in-person collaboration at our New York City office (3+ days per week) with flexibility to work remotely.",
+    })
+    expect(matchedLocation(j, base)).toBe("New York, NY")
+    expect(matchedLocation(j, { ...base, remote: "exclude" })).toBe("New York, NY")
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBeNull()
+  })
+
+  test("onsite interviews do not impose a permanent work location", () => {
+    const j = job({
+      id: "eligible:interview",
+      location: "New York",
+      locations: ["San Francisco", "New York"],
+      workMode: "onsite",
+      description: "We work in person in San Francisco and New York. After the technicals, we'll schedule an onsite in our office, where you'll meet the team.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "exclude" })).toBe("New York")
+  })
+
+  test("an unnamed mandatory office falls back to the local posting location", () => {
+    const j = job({
+      id: "eligible:unnamed-office",
+      location: "New York, NY",
+      workMode: "remote",
+      description: "Where we have offices, employees are expected to be in office for 4 days per week.",
+    })
+    expect(matchedLocation(j, base)).toBe("New York, NY")
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBeNull()
+  })
+
+  test("temporary onboarding and occasional travel preserve remote eligibility", () => {
+    const j = job({
+      id: "eligible:temporary-attendance",
+      location: "Santa Clara, CA or Remote",
+      workMode: "remote",
+      description: "Remote employees must travel to headquarters in Santa Clara twice a quarter. For the first two weeks of onboarding, employees are required to be in person at headquarters in Santa Clara, CA.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe("Santa Clara, CA or Remote")
+  })
+
+  test("the pronoun us is not evidence of US eligibility", () => {
+    const j = job({
+      id: "geography:pronoun",
+      location: "Malaysia",
+      workMode: "remote",
+      description: "This role is remote and you will work with us from Malaysia.",
+    })
+    expect(matchedLocation(j, base)).toBeNull()
+    expect(matchedLocation(job({
+      ...j,
+      location: "Remote - United States",
+      description: "Candidates must be based in Hong Kong and help us build our product.",
+    }), base)).toBeNull()
+  })
+
+  test("company-wide onsite transitions do not override a remote role exception", () => {
+    const j = job({
+      id: "eligible:company-policy",
+      location: "100 New Millennium Way, Bldg 1, Durham NC",
+      workMode: "remote",
+      description: "We are transitioning to full-time onsite work. Currently, some roles and locations require 100% onsite presence, while others require less. This transition does not apply to fully remote roles.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe(j.location)
+  })
+
+  test("description-only remote eligibility reports Remote rather than foreign headquarters", () => {
+    const j = job({
+      id: "eligible:description-only",
+      location: "London",
+      workMode: "remote",
+      description: "This role is fully remote anywhere in the United States.",
+    })
+    expect(matchedLocation(j, base)).toBe("Remote")
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe("Remote")
+    expect(matchedLocation(j, { ...base, remote: "exclude" })).toBeNull()
+  })
+
+  test("regional remote labels require local or explicit broader eligibility", () => {
+    const j = job({
+      id: "geography:regional-remote",
+      location: "Remote – Washington, DC",
+      workMode: "remote",
+    })
+    expect(matchedLocation(j, base)).toBeNull()
+    expect(matchedLocation(job({ ...j, location: "Remote – NY" }), base)).toBe("Remote – NY")
+    expect(matchedLocation(job({
+      ...j,
+      location: "Remote - Located in CA, CO, NY, TX",
+    }), base)).toBe("Remote - Located in CA, CO, NY, TX")
+    expect(matchedLocation(job({
+      ...j,
+      description: "This role is fully remote anywhere in the United States.",
+    }), base)).toBe("Remote")
+  })
+
+  test("office attendance policy explicitly exempts remote roles", () => {
+    const j = job({
+      id: "eligible:remote-office-exception",
+      location: "Remote - United States",
+      workMode: "remote",
+      description: "Must work from an office 4 days/week (except for remote roles). Where we have offices, employees are expected to be in office for 4 days per week.",
+    })
+    expect(matchedLocation(j, { ...base, remote: "only" })).toBe(j.location)
+    expect(matchedLocation(job({
+      ...j,
+      description: `${j.description} This role requires working onsite at our Los Angeles office.`,
+    }), base)).toBeNull()
+  })
 })
 
 describe("meetsTc", () => {

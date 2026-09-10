@@ -110,6 +110,31 @@ describe("run carry-forward", () => {
     expect(r2.jobs.map((j) => j.id)).toEqual(["linkedin:2"])
   })
 
+  test("foreign-residency remote jobs are rejected both fresh and carried without losing US remote jobs", async () => {
+    const ineligible = job("restricted-remote", {
+      location: "Hong Kong",
+      locations: ["Hong Kong"],
+      workMode: "remote",
+      description: "This role is remote, but candidates must be based in Hong Kong.",
+    })
+    const eligible = job("eligible-remote", {
+      location: "Remote - United States",
+      locations: ["Remote - United States"],
+      workMode: "remote",
+      description: "Candidates may work remotely from anywhere in the United States.",
+    })
+    const fresh = await run([params], profile, ctxWith(fake([ineligible, eligible])), store)
+    expect(fresh.jobs.map((j) => j.id)).toEqual(["linkedin:eligible-remote"])
+    expect(fresh.newIds).toEqual({ "linkedin:eligible-remote": true })
+
+    // Simulate the same ineligible posting persisted before the location guard existed.
+    store.record([ineligible])
+    const carried = await run([params], profile, ctxWith(fake([])), store)
+    expect(carried.jobs.map((j) => j.id)).toEqual(["linkedin:eligible-remote"])
+    expect(carried.carriedIds).toEqual({ "linkedin:eligible-remote": true })
+    expect(carried.newIds).toEqual({})
+  })
+
   test("a posting the source reports closed is retired and never carried", async () => {
     await run([params], profile, ctxWith(fake([job("1"), job("2")])), store)
     const r2 = await run([params], profile, ctxWith(fake([job("2")], ["1"])), store)

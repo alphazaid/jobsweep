@@ -34,12 +34,12 @@ function historySvg(runs: RunSummary[]): string {
   const pathComp = runs.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r.withComp).toFixed(1)}`).join(" ")
   const dots = runs.map((r, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(r.total).toFixed(1)}" r="2.5"><title>${new Date(r.ts).toLocaleString()} · ${r.total} open · ${r.withComp} with comp · ${r.newCount} new</title></circle>`).join("")
   const first = new Date(runs[0]!.ts), last = new Date(runs[runs.length - 1]!.ts)
-  return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Open postings per run">
+  return `<div class="chart-label">${max} open · thin line = with posted comp</div>
+  <svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Open postings per run">
     <line x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" class="axis"/>
     <path d="${pathComp}" class="line comp"/><path d="${path}" class="line"/>${dots}
-    <text x="${P}" y="${H - 6}" class="lab">${first.toLocaleDateString()}</text><text x="${W - P}" y="${H - 6}" class="lab" text-anchor="end">${last.toLocaleDateString()}</text>
-    <text x="${P}" y="${P - 8}" class="lab">${max} open · thin line = with posted comp</text>
-  </svg>`
+  </svg>
+  <div class="chart-label chart-dates"><span>${first.toLocaleDateString()}</span><span>${last.toLocaleDateString()}</span></div>`
 }
 
 function bars(rows: Array<[string, number]>, total: number): string {
@@ -69,48 +69,61 @@ export function renderDashboard(d: DashboardData): string {
   const fitDist = reviewed.length ? [5, 4, 3, 2, 1].map((f) => [`${f} — ${{ 5: "apply today", 4: "apply", 3: "maybe", 2: "unlikely", 1: "skip" }[f]}`, reviewed.filter((j) => j.ai!.fit === f).length] as [string, number]).filter(([, n]) => n) : []
   const lastRun = d.runs[d.runs.length - 1]
 
-  const card = (n: string | number, label: string, sub = "") => `<div class="card"><div class="n">${n}</div><div class="l">${label}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`
+  const card = (n: string | number, label: string, sub = "") => `<div class="card"><div class="l">${label}</div><div class="n">${n}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>jobsweep · ${esc(d.cities.join(" / "))}</title>
 ${themeScript(d.theme ?? {})}
 <style>
 ${themeCss()}
 :root{--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
-*{box-sizing:border-box}body{margin:0;font:14px/1.45 var(--sans);color:var(--ink);background:var(--bg)}
-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 24px;background:var(--panel);border-bottom:1px solid var(--rule)}
-header .meta{white-space:nowrap}
-header h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-.01em}header .meta{color:var(--mute);font-size:12px}
-nav{margin-left:auto;display:flex;gap:14px;font-size:13px;white-space:nowrap}nav a{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent}nav a:hover{border-color:var(--ink)}nav a.cur{border-color:var(--ink)}
-main{max-width:1100px;margin:0 auto;padding:20px 24px 60px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px}
-.card{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:12px 14px}.card .n{font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.02em}.card .l{color:var(--mute);font-size:12px;margin-top:2px}.card .s{font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:4px}
-h2{font-size:13px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;margin:22px 0 8px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:14px 16px}
-.chart{width:100%;height:auto;display:block}.chart .line{fill:none;stroke:var(--ink);stroke-width:1.8}.chart .line.comp{stroke:var(--mute);stroke-width:1;stroke-dasharray:3 3}.chart .axis{stroke:var(--rule)}.chart circle{fill:var(--ink)}.chart .lab{font-family:var(--mono);font-size:10px;fill:var(--mute)}
-.bars{width:100%;border-collapse:collapse;font-size:13px}.bars td{padding:3px 0;vertical-align:middle}.bars .l{width:40%;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}.bars .b div{height:10px;background:var(--ink);border-radius:2px;min-width:2px}.bars .n{width:80px;text-align:right;font-family:var(--mono);font-size:12px}.bars .pct{color:var(--mute);margin-left:6px}
-.mute{color:var(--mute)}
-.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.runform{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end}.runform label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mute)}
-.runform input,.runform select{font:inherit;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:5px 7px;min-width:0}.runform input[name=cities]{width:280px}
-.runform .hint{font-family:var(--mono);font-size:11px}.runform fieldset{border:1px solid var(--rule);border-radius:4px;padding:4px 8px 6px;margin:0;display:flex;gap:10px;flex-wrap:wrap}.runform legend{font-size:11px;color:var(--mute);padding:0 3px}
-.runform label.chk{flex-direction:row;align-items:center;gap:5px;color:var(--ink);font-size:13px}.runform label.chk input{accent-color:var(--accent)}.runform .actions{width:100%;margin-top:4px}
-button,.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:5px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none}
-button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}button[disabled]{opacity:.5;cursor:default}
-pre#log{background:var(--code);color:var(--codeInk);font-family:var(--mono);font-size:12px;padding:12px;border-radius:6px;max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:10px;display:none}
-:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;font:14px/1.5 var(--sans);color:var(--ink);background:var(--bg)}
+a{color:inherit}button,a,input,select,summary{-webkit-tap-highlight-color:transparent}
+.sidebar{position:fixed;inset:0 auto 0 0;width:212px;padding:32px 20px 24px;border-right:1px solid var(--rule);background:var(--panel);display:flex;flex-direction:column;gap:40px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-size:21px;font-weight:700;letter-spacing:-1px}.brand-mark{display:grid;place-items:center;width:28px;height:28px;background:var(--ink);color:var(--panel);border-radius:7px;font:600 15px var(--mono);letter-spacing:-3px;padding-right:3px}
+.nav-label,.eyebrow{font-size:10px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.nav-label{padding:0 12px;margin-bottom:12px}.sidebar nav{display:grid;gap:5px}.sidebar nav a{padding:10px 12px;border-radius:6px;color:var(--mute);text-decoration:none;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sidebar nav a:hover{background:var(--bg);color:var(--ink)}.sidebar nav .cur{background:var(--sel);color:var(--accent);font-weight:600}.nav-count{font:11px var(--mono)}
+.sidebar-foot{margin-top:auto;padding:16px 12px 0;border-top:1px solid var(--rule);color:var(--mute);font-size:11px}.sidebar-foot strong{display:block;color:var(--ink);font-weight:500;margin-bottom:4px}
+.workspace{margin-left:212px}.topbar{min-height:77px;padding:18px 36px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;gap:18px;background:var(--panel)}.breadcrumb{font-size:12px;color:var(--mute)}.breadcrumb span{color:var(--ink);margin-left:10px}
+.theme{margin-left:0;gap:4px}.theme select,.theme button{padding:6px 8px;border-radius:5px}.theme button{text-transform:capitalize}
+main{max-width:1440px;margin:0 auto;padding:36px 36px 48px}.page-heading{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:28px}.page-heading h1{font-size:30px;line-height:1.2;letter-spacing:-1px;font-weight:650;margin:8px 0 10px}.page-heading p{margin:0;color:var(--mute);font-size:12px}.heading-actions{display:flex;gap:8px;flex-shrink:0}
+button,.btn{display:inline-flex;justify-content:center;align-items:center;gap:8px;font:500 12px/1.5 var(--sans);padding:10px 15px;border-radius:6px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;text-decoration:none;white-space:nowrap}
+button:hover,.btn:hover{border-color:var(--mute)}.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}.primary:hover{opacity:.85}button[disabled]{opacity:.5;cursor:default}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:24px}.card{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:20px}.card .l{font-size:12px;color:var(--mute)}.card .n{font-size:32px;line-height:1.25;font-weight:600;letter-spacing:-1px;font-variant-numeric:tabular-nums;margin:10px 0}.card .s{font-size:11px;color:var(--mute)}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:22px;min-width:0}.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}.panel h2{font-size:14px;letter-spacing:-.2px;font-weight:600;margin:0}.panel-head p,.section-heading p{font-size:12px;color:var(--mute);margin:4px 0 0}.tag{font:10px var(--mono);border:1px solid var(--rule);padding:4px 7px;border-radius:4px;color:var(--mute);white-space:nowrap}
+.overview-grid{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(250px,1fr);gap:20px;margin-bottom:24px}.history-panel{display:flex;flex-direction:column}.history-panel .chart{margin:auto 0}.chart{width:100%;height:auto;display:block}.chart .line{fill:none;stroke:var(--accent);stroke-width:2}.chart .line.comp{stroke:var(--mute);stroke-width:1;stroke-dasharray:3 3}.chart .axis{stroke:var(--rule)}.chart circle{fill:var(--accent)}.chart-label{font:12px/1.5 var(--mono);color:var(--mute);padding:0 3.75%}.chart-dates{display:flex;justify-content:space-between;gap:12px}
+.queue{background:var(--sel);display:flex;flex-direction:column}.queue .queue-number{font-size:44px;line-height:1.1;font-weight:600;letter-spacing:-2px;margin:20px 0 8px;font-variant-numeric:tabular-nums}.queue p{margin:0 0 22px;font-size:12px;color:var(--mute);max-width:280px}.queue .btn{align-self:flex-start;margin-top:auto}.queue-foot{font-size:11px;color:var(--mute);margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
+.search-panel{margin-bottom:34px;padding:0;overflow:hidden}.search-panel summary{cursor:pointer;list-style:none;padding:20px 22px;display:flex;align-items:center;gap:16px}.search-panel summary::-webkit-details-marker{display:none}.search-panel summary strong{display:block;font-size:13px;font-weight:600}.search-panel summary .summary-copy{flex:1;min-width:0}.search-panel summary small{display:block;font-size:12px;color:var(--mute);margin-top:4px;overflow-wrap:anywhere}.summary-toggle{font-size:12px;color:var(--accent);white-space:nowrap}.summary-toggle:after{content:" +";font-family:var(--mono)}details[open] .summary-toggle:after{content:" −"}details[open] summary{border-bottom:1px solid var(--rule)}
+.search-body{padding:22px}.runform{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px 16px;align-items:end}.runform label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--mute);min-width:0}.runform label:has([name=preset]),.runform label:has([name=cities]){grid-column:span 2}
+.runform input,.runform select{font:inherit;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:5px;padding:10px;min-width:0;max-width:100%;width:100%}.runform .hint{font-size:10px}.runform fieldset{grid-column:1/-1;border:1px solid var(--rule);border-radius:5px;padding:12px;margin:0;display:flex;gap:14px;flex-wrap:wrap}.runform legend{font-size:11px;color:var(--mute);padding:0 4px}
+.runform label.chk{flex-direction:row;align-items:center;gap:7px;color:var(--ink);font-size:12px;grid-column:span 2}.runform label.chk input{accent-color:var(--accent);width:15px;height:15px;margin:0}.runform .actions{grid-column:1/-1;display:flex;gap:14px;align-items:center;margin-top:4px}.runform .actions .mute{font-size:11px;max-width:480px}
+pre#log{background:var(--code);color:var(--codeInk);font-family:var(--mono);font-size:12px;padding:16px;border-radius:6px;max-height:280px;overflow:auto;white-space:pre-wrap;margin:18px 0 0;display:none}
+.section-heading{display:flex;align-items:end;justify-content:space-between;margin:0 0 18px}.section-heading h2{font-size:18px;letter-spacing:-.4px;margin:0;font-weight:600}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.bars{width:100%;border-collapse:collapse;font-size:12px}.bars td{padding:8px 0;vertical-align:middle}.bars .l{width:39%;padding-right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}.bars .b{width:38%}.bars .b div{height:6px;background:var(--accent);border-radius:2px}.bars .n{width:84px;text-align:right;font-family:var(--mono);font-size:11px;padding-left:10px;white-space:nowrap}.bars .pct{display:inline-block;color:var(--mute);margin-left:8px;min-width:28px}
+.mute{color:var(--mute)}.empty-state{border:1px dashed var(--rule);border-radius:6px;padding:22px;font-size:12px;color:var(--mute)}.empty-state strong{display:block;color:var(--ink);font-size:13px;font-weight:500;margin-bottom:6px}.empty-state p{margin:0;line-height:1.8}code{font:11px var(--mono)}.page-footer{display:flex;justify-content:space-between;gap:16px;margin-top:28px;color:var(--mute);font-size:11px}.page-footer a{text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(min-width:1500px){main{padding-top:44px}.card{padding:24px}.panel{padding:26px}.search-panel{padding:0}}
+@media(max-width:1100px){.sidebar{width:180px;padding:28px 14px}.workspace{margin-left:180px}.topbar{padding:18px 24px}main{padding:28px 24px}.cards{gap:10px}.card{padding:16px}.card .n{font-size:28px}.page-heading{align-items:flex-start}.page-heading h1{font-size:26px}.heading-actions{flex-direction:column}.overview-grid{grid-template-columns:minmax(0,1.4fr) minmax(220px,1fr)}}
+@media(max-width:800px){.sidebar{position:static;width:auto;padding:16px 20px;flex-direction:row;align-items:center;gap:24px;border-right:0;border-bottom:1px solid var(--rule)}.brand{font-size:19px}.sidebar nav{display:flex;gap:4px}.sidebar nav a{padding:8px 10px}.sidebar .nav-label,.sidebar .resources,.sidebar-foot{display:none}.workspace{margin-left:0}.topbar{padding:12px 20px;min-height:58px}.breadcrumb{display:none}.theme{flex-wrap:wrap}.overview-grid{grid-template-columns:minmax(0,1.5fr) minmax(220px,1fr)}main{padding:26px 20px}.card .n{font-size:26px}.panel{padding:18px}.search-panel{padding:0}}
+@media(max-width:600px){.sidebar{justify-content:space-between;gap:12px}.sidebar nav a{font-size:12px}.sidebar nav a[href="#insights"]{display:none}.nav-count{display:none}.page-heading{flex-direction:column;gap:18px;margin-bottom:22px}.page-heading h1{font-size:27px}.heading-actions{flex-direction:row;width:100%}.heading-actions .btn{flex:1}.cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card .n{font-size:30px}.overview-grid,.grid{grid-template-columns:minmax(0,1fr);gap:16px}.overview-grid{margin-bottom:16px}.queue .queue-number{margin-top:10px}.queue p{max-width:none}.search-panel summary{padding:18px;align-items:flex-start;gap:10px}.summary-toggle{font-size:11px}.search-body{padding:18px}.runform{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px}.runform .actions{align-items:flex-start;flex-direction:column}.runform label.chk{grid-column:1/-1}.runform fieldset label.chk{grid-column:auto}.page-footer{flex-direction:column;gap:8px}.panel-head{gap:10px}.tag{font-size:9px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style></head><body>
-<header><h1>jobsweep</h1><span class="meta">${esc(d.cities.join(" / "))} · last search ${esc(d.date)}${lastRun ? ` · ${new Date(lastRun.ts).toLocaleTimeString()}` : ""}</span>
-<nav><a class="cur" href="/">Dashboard</a><a href="/triage">Triage</a><a href="/api/jobs.csv">Export CSV</a><a href="/api/jobs.json">Export JSON</a><a href="/api/decisions.json">Decisions</a></nav>${themeSwitcher()}</header>
-<main>
-<div class="cards">
-${card(jobs.length, "open matches", `${d.carriedIds.size} carried · ${d.newIds.size} new`)}
-${card(withComp.length, "with posted comp", `${jobs.length ? Math.round((withComp.length / jobs.length) * 100) : 0}% of open`)}
-${card(median(ceilings) === null ? "—" : k(median(ceilings)!), "median comp ceiling", ceilings.length ? `top ${k(Math.max(...ceilings))}` : "")}
-${card(dec("apply") + dec("applied"), "marked apply", `${dec("applied")} applied · ${dec("maybe")} maybe`)}
-${card(undecided, "to review", `${dec("skip")} skipped`)}
-${card(reviewed.length, "AI reviewed", reviewed.length ? `${reviewed.filter((j) => j.ai!.fit >= 4).length} scored 4+` : "run jobsweep rank")}
-</div>
-<div class="panel">
+<aside class="sidebar" aria-label="Workspace navigation">
+<a class="brand" href="/"><span class="brand-mark" aria-hidden="true">//</span>jobsweep</a>
+<div><div class="nav-label">Workspace</div><nav aria-label="Main"><a class="cur" href="/" aria-current="page">Overview</a><a href="/triage">Triage <span class="nav-count">${undecided}</span></a><a href="#insights">Insights</a></nav></div>
+<div class="resources"><div class="nav-label">Your data</div><nav aria-label="Exports"><a href="/api/jobs.csv">Export CSV <span aria-hidden="true">↗</span></a><a href="/api/jobs.json">Export JSON <span aria-hidden="true">↗</span></a><a href="/api/decisions.json">Decisions <span aria-hidden="true">↗</span></a></nav></div>
+<div class="sidebar-foot"><strong>Local by design.</strong>Your search stays on your machine.</div>
+</aside>
+<div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace <span>/ &nbsp; Overview</span></div>${themeSwitcher()}</header>
+<main id="overview">
+<div class="page-heading"><div><div class="eyebrow">Your job search</div><h1>Your search, at a glance.</h1><p>${esc(d.cities.join(" / ") || "All locations")} · Last search ${esc(d.date)}${lastRun ? ` at ${new Date(lastRun.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</p></div><div class="heading-actions"><a class="btn" href="#search">Search settings</a><a class="btn primary" href="/triage">Review jobs <span aria-hidden="true">→</span></a></div></div>
+<section class="cards" aria-label="Search summary">
+${card(jobs.length, "Open matches", `${d.carriedIds.size} carried · ${d.newIds.size} new`)}
+${card(withComp.length, "With posted comp", `${jobs.length ? Math.round((withComp.length / jobs.length) * 100) : 0}% of open matches`)}
+${card(median(ceilings) === null ? "—" : k(median(ceilings)!), "Median comp ceiling", ceilings.length ? `Highest ceiling ${k(Math.max(...ceilings))}` : "No compensation posted")}
+${card(dec("apply") + dec("applied"), "Marked to apply", `${dec("applied")} applied · ${dec("maybe")} maybe`)}
+</section>
+<div class="overview-grid"><section class="panel history-panel"><div class="panel-head"><div><h2>Search activity</h2><p>Open postings across your search runs</p></div><span class="tag">${d.runs.length} runs</span></div>${historySvg(d.runs)}</section>
+<section class="panel queue"><div class="eyebrow">Your next step</div><div class="queue-number">${undecided}</div><h2>${undecided === 1 ? "job waiting for a decision" : "jobs waiting for a decision"}</h2><p>${undecided ? "Review the details, shortlist your favorites, and keep your search moving." : jobs.length ? "You’re all caught up. Revisit your shortlist or run a fresh search." : "Run your first search to start building your shortlist."}</p><a class="btn primary" href="/triage">${undecided ? "Start reviewing" : "Open triage"} <span aria-hidden="true">→</span></a><div class="queue-foot">${dec("skip")} skipped · ${reviewed.length} AI reviewed${reviewed.length ? ` · ${reviewed.filter((j) => j.ai!.fit >= 4).length} scored 4+` : ""}</div></section></div>
+<details class="panel search-panel" id="search"${jobs.length ? "" : " open"}><summary><div class="summary-copy"><strong>Search configuration</strong><small>${esc(d.profile?.cities.join(" / ") || "Choose your cities")}${d.profile?.minTc != null ? ` · ${k(d.profile.minTc)} minimum comp` : ""}${d.profile?.maxYoe != null ? ` · Up to ${d.profile.maxYoe} years` : ""} · Adjust for your next run</small></div><span class="summary-toggle">Configure search</span></summary><div class="search-body">
 <form id="runform" class="runform" autocomplete="off">
   <label>Role<select name="preset">${Object.entries(PRESETS).map(([id, p]) => `<option value="${id}"${id === (d.profile?.preset ?? "swe") ? " selected" : ""}>${esc(id)} — ${esc(p.description)}</option>`).join("")}</select></label>
   <label>Cities <span class="hint">separate with ;</span><input name="cities" value="${esc(d.profile?.cities.join("; ") ?? "")}" placeholder="New York, NY; Austin, TX" required></label>
@@ -123,20 +136,22 @@ ${card(reviewed.length, "AI reviewed", reviewed.length ? `${reviewed.filter((j) 
   <label class="chk"><input type="checkbox" name="save">Save these as my defaults</label>
   <div class="actions"><button class="primary" id="run" type="submit">Run search</button><span class="mute" id="runstate">Prefilled from your profile; change anything for this run, or tick “save” to keep it.</span></div>
 </form>
-<pre id="log"></pre></div>
-<h2>Open postings per run</h2><div class="panel">${historySvg(d.runs)}</div>
+<pre id="log" aria-label="Search progress" role="log"></pre></div></details>
+<div class="section-heading" id="insights"><div><h2>Behind the matches</h2><p>Where your opportunities are coming from.</p></div></div>
 <div class="grid">
-<div><h2>By source</h2><div class="panel">${bars(bySource, jobs.length)}</div></div>
-<div><h2>Comp ceiling</h2><div class="panel">${bars(byBand, ceilings.length)}</div></div>
-<div><h2>Title band</h2><div class="panel">${bars(byLevel, jobs.length)}</div></div>
-<div><h2>Most postings</h2><div class="panel">${bars(topCompanies, jobs.length)}</div></div>
-<div><h2>Decisions</h2><div class="panel">${bars([["to review", undecided], ["apply", dec("apply")], ["maybe", dec("maybe")], ["applied", dec("applied")], ["skipped", dec("skip")]], jobs.length)}</div></div>
-<div><h2>AI fit</h2><div class="panel">${fitDist.length ? bars(fitDist, reviewed.length) : `<p class="mute">No reviews yet — <code>jobsweep rank</code> with a model configured.</p>`}</div></div>
+<section class="panel"><div class="panel-head"><div><h2>Sources</h2><p>Open matches by job board</p></div><span class="tag">${bySource.length} sources</span></div>${bars(bySource, jobs.length)}</section>
+<section class="panel"><div class="panel-head"><div><h2>Compensation</h2><p>Posted compensation ceilings, not guaranteed offers</p></div></div>${bars(byBand, ceilings.length)}</section>
+<section class="panel"><div class="panel-head"><div><h2>Companies hiring</h2><p>Most open matches in your search</p></div><span class="tag">Top ${topCompanies.length}</span></div>${bars(topCompanies, jobs.length)}</section>
+<section class="panel"><div class="panel-head"><div><h2>Experience levels</h2><p>Seniority inferred from posting titles</p></div></div>${bars(byLevel, jobs.length)}</section>
+<section class="panel"><div class="panel-head"><div><h2>Your pipeline</h2><p>Decisions across your open matches</p></div><a href="/triage" class="mute">Triage →</a></div>${bars([["To review", undecided], ["Apply", dec("apply")], ["Maybe", dec("maybe")], ["Applied", dec("applied")], ["Skipped", dec("skip")]], jobs.length)}</section>
+<section class="panel"><div class="panel-head"><div><h2>AI fit</h2><p>${reviewed.length} of ${jobs.length} matches reviewed</p></div><span class="tag">Optional</span></div>${fitDist.length ? bars(fitDist, reviewed.length) : `<div class="empty-state"><strong>A second opinion, when you want it.</strong><p>Ask your agent to rank your jobs, or run <code>jobsweep rank</code> with your own model key. Your search works without AI.</p></div>`}</section>
 </div>
-</main>
+<footer class="page-footer"><span>Made for your next move. Stored locally.</span><span>Export <a href="/api/jobs.csv">CSV</a> · <a href="/api/jobs.json">JSON</a> · <a href="/api/decisions.json">Decisions</a></span></footer>
+</main></div>
 <script>
 const btn=document.getElementById("run"),log=document.getElementById("log"),state=document.getElementById("runstate");
 const form=document.getElementById("runform");
+document.querySelector('a[href="#search"]').addEventListener("click",()=>{document.getElementById("search").open=true;});
 form.onsubmit=async(e)=>{e.preventDefault();btn.disabled=true;log.style.display="block";log.textContent="";state.textContent="running…";
   const fd=new FormData(form);const fields={preset:fd.get("preset"),cities:fd.get("cities"),minTc:fd.get("minTc"),maxYoe:fd.get("maxYoe"),days:fd.get("days"),remote:fd.get("remote"),sources:fd.getAll("sources"),new:fd.get("new")==="on",save:fd.get("save")==="on"};
   const r=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)});

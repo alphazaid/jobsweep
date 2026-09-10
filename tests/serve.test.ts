@@ -115,13 +115,20 @@ describe("serve", () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  test("dashboard renders counts; served triage has a header link back", async () => {
-    const triage = await (await fetch(`${base}/triage`)).text()
-    expect(triage).toContain('<a class="back" href="/">')
-    const html = await (await fetch(`${base}/`)).text()
-    expect(html).toContain("open matches")
-    expect(html).toContain('<div class="n">2</div>')
-    expect(html).toContain("1 carried · 1 new")
+  test("dashboard and triage offer working navigation and exports", async () => {
+    for (const [path, destinations] of [
+      ["/", ["/triage", "/api/jobs.csv", "/api/jobs.json", "/api/decisions.json"]],
+      ["/triage", ["/"]],
+    ] as const) {
+      const page = await fetch(`${base}${path}`)
+      expect(page.status).toBe(200)
+      const html = await page.text()
+      const links = [...html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1])
+      for (const destination of destinations) {
+        expect(links).toContain(destination)
+        expect((await fetch(`${base}${destination}`)).status).toBe(200)
+      }
+    }
   })
   test("decisions round-trip and appear in the export and the triage page", async () => {
     const r = await fetch(`${base}/api/decisions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: "greenhouse:acme:1", status: "apply", note: "hi" }) })

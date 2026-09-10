@@ -127,17 +127,19 @@ A small local server, in the spirit of `omp stats`: the page is rebuilt on every
 
 **`/` — Dashboard**
 
-- Stat cards: open matches (new · carried), with posted comp (%), median comp ceiling (and the top), marked apply (applied · maybe), to review (skipped), AI reviewed.
-- **Search form** — prefilled from your profile (role preset, cities, comp floor, max years, days, remote, sources). Change anything for a one-off run — "Austin, 180k, boards only, last 7 days" — or tick *Save these as my defaults* to write them to `profile.json`. Runs `jobsweep search` with those flags and streams its real progress (source by source, counts, timings) into the page, then reloads. One run at a time; a run over 15 minutes is killed so the button can't stay stuck.
-- Open postings per run — a history line chart (total, and with-comp dashed). Appears from the second run onward; every `search` records a row.
-- Breakdowns: by source, comp ceiling band, title band, companies with the most postings, your decision funnel, AI fit distribution.
+- Overview workspace with sidebar navigation, four summary cards (open matches, posted comp, median comp ceiling, marked to apply), and a review queue showing undecided jobs and AI review coverage.
+- **Search configuration** opens from **Search settings** or its expandable summary. All fields remain prefilled from your profile (role preset, cities, comp floor, max years, days, remote, sources). Change them for a one-off run or tick *Save these as my defaults*. Runs `jobsweep search` and streams real progress into the page before reloading. One run at a time; a run over 15 minutes is killed so the button can't stay stuck.
+- Search activity shows open postings per run, with a dashed line for postings with compensation. Appears from the second run onward; every `search` records a row.
+- Grouped insights cover sources, compensation ceilings, companies, experience levels, your decision pipeline, and optional AI fit. The layout stacks on narrow screens; CSV, JSON, and decisions exports remain available in the footer.
 
 **`/triage` — Triage**
 
-The keyboard-driven list, with marks saved server-side in SQLite (shared across browsers, included in exports). "← Dashboard" top-left goes back.
+The triage workspace separates pipeline and location/compensation filters, a searchable job list, and a structured posting detail pane. Job titles and company names wrap rather than disappearing into ellipses. Marks are saved server-side in SQLite (shared across browsers and included in exports); standalone HTML keeps them in the browser.
 
-`j`/`k` move · `a` apply · `m` maybe · `x` skip · `d` applied · `o` open posting · `/` search · `Enter` open.
-Top bar: All / Local / Remote · comp Posted / Unknown · status tabs · Fit ≥ · sort (comp, fit, posted, company, AI fit once ranked). The detail pane shows the comp band against your floor, years, skills matched (highlighted in the description too), the AI review when present, and a notes box.
+`j`/`k` move · `a` apply · `m` maybe · `x` skip · `d` applied · `o` open posting · `/` return to search · `Enter` open · `Escape` return to the list.
+Decision and navigation shortcuts pause while a form field, button, link, or filter summary has focus. Escape still returns from focused buttons or links to the list; in a form field it first removes focus.
+The list supports minimum skill matches and sorting by compensation, skill match, posted date, company, picks, or AI fit when available. Details include compensation, years, source, posting date, AI reasoning, highlighted skills, and notes. Previous/next controls let you review without returning to the list. On narrow screens, select a job to open its detail view and use **Back to jobs** to return; pipeline filters collapse above the list.
+Skill ratios, the minimum-skill filter, and skill-match sorting appear only when profile skills are configured.
 
 **HTTP API** (same data, loopback only):
 
@@ -165,7 +167,7 @@ The server binds `127.0.0.1` only and has no auth: nothing off your machine can 
 
 ## Dashboard themes
 
-Both pages (dashboard and triage) have a palette picker and light / dark / system buttons — top right on the dashboard, in the triage footer. Five flat palettes, each with a light and a dark variant: **Graphite** (default), **Ocean**, **Forest**, **Ember**, **Mono**. No gradients, no glow. The choice is applied before first paint (no flash) and remembered per browser. Set a starting point in `profile.json`:
+Both pages (dashboard and triage) have a palette picker and light / dark / system buttons in the header. Five flat palettes, each with a light and a dark variant: **Graphite** (default), **Ocean**, **Forest**, **Ember**, **Mono**. No gradients, no glow. The choice is applied before first paint (no flash) and remembered per browser. Set a starting point in `profile.json`:
 
 ```json
 "theme": { "palette": "ocean", "mode": "dark" }
@@ -279,8 +281,8 @@ The seed company boards skew tech; for other fields the reach comes from Adzuna 
 - **Comp.** The posted band is parsed from structured fields when the board has them, else from the text: `$180K–$220K`, `180,000 - 220,000 USD`, `158,100.00 - 213,800.00 USD annually`, hourly (`$60–$75/hr` → annualised), monthly. The **top** of the band is compared to your floor. Postings with no stated comp are kept in their own section, never silently dropped (`--strict-comp` to drop them).
 - **Years.** The first "N+ years … experience" requirement is parsed (largest one inside a qualifications block). Unstated → inferred from the title (entry 0 / mid 2 / senior 5 / staff-lead-manager 8).
 - **Age.** Company-board postings older than 90 days are never returned, whatever `days` says — boards keep evergreen reqs open for years. `days` narrows within that.
-- **City.** Metro aliases (`src/metros.json`; add your own in `~/.config/jobsweep/metros.json`) so "New York" matches Brooklyn and Jersey City. Remote-US is included by default; `remote: only | exclude`. A posting whose location is remote-*Canada* or remote-*EU* does not match a US city search.
-- **Exclude.** Words in `exclude` (default `clearance`, `manager`, `intern`, `contract`) drop postings by title. Body text is left to you or to `rank`: "must be able to obtain Public Trust" is an eligibility question, not a keyword.
+- **City and remote eligibility.** Metro aliases (`src/metros.json`; add your own in `~/.config/jobsweep/metros.json`) match places such as Brooklyn, NY and Jersey City without treating Brooklyn, OH as NYC. Remote roles need compatible geography, such as US, worldwide, or an unrestricted remote location; a remote flag on an unidentified foreign location is not sufficient. Regional remote labels must include your metro/state or establish broader eligibility. Explicit candidate-residency restrictions, state hiring exclusions, and role-specific onsite/hybrid obligations in the captured description override misleading metadata. Interviews, temporary onboarding, occasional travel, and company headquarters are not permanent work-location restrictions; office policies that exempt remote roles remain exceptions. Eligibility established only by a remote description is displayed as `Remote`, not an unrelated headquarters. This shared filter runs during search on both fresh and carried-forward postings; `remote: only | exclude` remains available. Implicit or ambiguous eligibility still needs review.
+- **Exclude.** Words in `exclude` (default `clearance`, `manager`, `intern`, `contract`) drop postings by title. Other body-text requirements are left to you or to `rank`: "must be able to obtain Public Trust" is an eligibility question, not a keyword.
 - **Skills fit.** `skills` in the profile are matched against title + description; shown as `matched/total` (e.g. `5/18` for 18 profile skills) and highlighted in the description. A hint for sorting, not a filter.
 - **Dedupe.** The same posting seen on LinkedIn, freehire, and the company's own board collapses to the copy with the best data; the company board wins over aggregators, which sometimes mislabel locations.
 - **Memory and carry-forward.** Postings are remembered in SQLite with first/last-seen dates. LinkedIn's search returns a different sample every call, so postings it showed you recently are carried forward (marked `°`) after being re-checked as still open (cached detail ≤ 3 days, else re-fetched; closed/404 → retired). Board sources are complete listings, so absence means closed and they are never carried. Carried rows are re-filtered by today's parameters.
